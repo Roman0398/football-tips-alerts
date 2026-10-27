@@ -36,5 +36,8 @@
     ]
   },
   "snapshots": {},
-  "telegram_update_id": 209510901
+  "telegram_update_id": 209510901,
+  "unavailable_sources": [
+    "tipstonga"
+  ]
 }
