@@ -1,0 +1,261 @@
+
+name: Geobetting Telegram Alerts
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '*/5 * * * *'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: geobetting-monitor
+  cancel-in-progress: false
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install browser
+        run: |
+          pip install playwright
+          python -m playwright install chromium
+
+      - name: Monitor Geobetting
+        env:
+          BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          import re
+          import subprocess
+          import urllib.parse
+          import urllib.request
+          from pathlib import Path
+          from playwright.sync_api import sync_playwright
+
+          URL = "https://www.olbg.com/tipsters/tips/420769"
+          STATE = Path(".state/geobetting-seen.json")
+
+          MARKETS = {
+              "Both Teams to Score": "Обидві заб'ють",
+              "Total Goals": "Тотал голів",
+              "Asian Hcap": "Азійська фора",
+              "Full Time Result": "Результат матчу",
+              "Result and BTTS": "Результат + обидві заб'ють",
+              "Total Corners": "Тотал кутових",
+              "Total Cards": "Тотал карток",
+              "Correct Score": "Точний рахунок",
+              "Half Time Result": "Результат першого тайму",
+              "Half Time/Full Time": "Тайм / матч",
+              "Anytime Goalscorer": "Автор гола",
+              "First Goalscorer": "Перший автор гола",
+          }
+
+          MONTHS = {
+              "January": "січня",
+              "February": "лютого",
+              "March": "березня",
+              "April": "квітня",
+              "May": "травня",
+              "June": "червня",
+              "July": "липня",
+              "August": "серпня",
+              "September": "вересня",
+              "October": "жовтня",
+              "November": "листопада",
+              "December": "грудня",
+          }
+
+          def translate(s):
+              s = re.sub(
+                  r"^Over\s+", "Більше ", s, flags=re.I
+              )
+              s = re.sub(
+                  r"^Under\s+", "Менше ", s, flags=re.I
+              )
+              s = re.sub(
+                  r"^Yes\s*\(BTTS\)$",
+                  "Так (обидві заб'ють)", s, flags=re.I
+              )
+              s = re.sub(
+                  r"^No\s*\(BTTS\)$",
+                  "Ні (обидві заб'ють)", s, flags=re.I
+              )
+              s = s.replace("(AH)", "(азійська фора)")
+              return s.replace(".", ",")
+
+          def send(message):
+              data = urllib.parse.urlencode({
+                  "chat_id": os.environ["CHAT_ID"],
+                  "text": message,
+                  "disable_web_page_preview": "true",
+              }).encode()
+
+              api = (
+                  "https://api.telegram.org/bot"
+                  + os.environ["BOT_TOKEN"]
+                  + "/sendMessage"
+              )
+
+              with urllib.request.urlopen(
+                  api, data=data, timeout=30
+              ) as response:
+                  result = json.load(response)
+
+              if not result.get("ok"):
+                  raise RuntimeError("Telegram send failed")
+
+          with sync_playwright() as p:
+              browser = p.chromium.launch(headless=True)
+              page = browser.new_page(
+                  viewport={"width": 390, "height": 844}
+              )
+              page.goto(
+                  URL,
+                  wait_until="domcontentloaded",
+                  timeout=60000
+              )
+
+              try:
+                  page.get_by_text(
+                      "Accept all", exact=True
+                  ).last.click(timeout=2500)
+              except Exception:
+                  pass
+
+              page.wait_for_timeout(4000)
+              text = page.locator("body").inner_text()
+              browser.close()
+
+          if "geobetting's Tips" not in text:
+              raise RuntimeError(
+                  "OLBG Current Tips section unavailable"
+              )
+
+          if "geobetting has no current tips." in text.lower():
+              print("No active tips.")
+              raise SystemExit(0)
+
+          lines = [
+              x.strip() for x in text.splitlines()
+              if x.strip()
+          ]
+
+          start = next(
+              i for i, x in enumerate(lines)
+              if "geobetting's Tips" in x
+          )
+          lines = lines[start + 1:]
+
+          for i, x in enumerate(lines):
+              if x.startswith("Tips are normally settled"):
+                  lines = lines[:i]
+                  break
+
+          date = ""
+          match = ""
+          found = []
+
+          for i, line in enumerate(lines):
+              if re.fullmatch(
+                  r"\d{1,2} [A-Za-z]+ 20\d{2}", line
+              ):
+                  date = line
+                  match = ""
+
+              elif re.match(
+                  r"^\d{1,2}:\d{2}\s+.+\s+v\s+.+$",
+                  line
+              ):
+                  match = line
+
+              elif line in MARKETS and match and i > 0:
+                  selection = lines[i - 1]
+
+                  if len(selection) > 150:
+                      continue
+
+                  if selection in MARKETS or selection == "@":
+                      continue
+
+                  key = hashlib.sha256(
+                      (
+                          date + "|" + match + "|"
+                          + line + "|" + selection
+                      ).encode()
+                  ).hexdigest()
+
+                  found.append(
+                      (key, date, match, selection, line)
+                  )
+
+          print("Recognized tips:", len(found))
+
+          if not found:
+              raise RuntimeError(
+                  "Active tips cannot be parsed. "
+                  "Check OLBG page structure."
+              )
+
+          STATE.parent.mkdir(
+              parents=True, exist_ok=True
+          )
+
+          seen = set(
+              json.loads(STATE.read_text())
+              if STATE.exists() else []
+          )
+
+          for key, date, match, selection, market in found:
+              if key in seen:
+                  continue
+
+              for en, uk in MONTHS.items():
+                  date = date.replace(en, uk)
+
+              message = (
+                  "⚽ Новий прогноз Geobetting\n\n"
+                  f"📅 {date}\n"
+                  f"🏟 {match}\n"
+                  f"📊 {MARKETS[market]}\n"
+                  f"🎯 {translate(selection)}\n\n"
+                  "📌 Перевір коефіцієнт перед ставкою\n"
+                  f"🔗 {URL}"
+              )
+
+              send(message)
+              seen.add(key)
+
+              STATE.write_text(
+                  json.dumps(sorted(seen), indent=2)
+              )
+
+              subprocess.run(
+                  ["git", "add", str(STATE)],
+                  check=True
+              )
+
+              subprocess.run([
+                  "git",
+                  "-c", "user.name=Geobetting Bot",
+                  "-c",
+                  "user.email=bot@users.noreply.github.com",
+                  "commit", "-m", "Save delivered tips"
+              ], check=True)
+
+              subprocess.run(
+                  ["git", "push"],
+                  check=True
+              )
+
+              print("Notification delivered:", match)
+
+          print("Monitoring complete.")
+          PY
