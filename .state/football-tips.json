@@ -1,6 +1,7 @@
 {
   "seen": [
-    "4bf5239857ae08340d7044f4598edc2c34096bd6f497861412bfb5e43686b1df"
+    "4bf5239857ae08340d7044f4598edc2c34096bd6f497861412bfb5e43686b1df",
+    "9378cc06ec2704608e97cf0618d2bffde98954a665c1108ad279518173efed23"
   ],
   "matches": {
     "2026-10-27|lazio|sassuolo": [
@@ -8,6 +9,13 @@
         "author": "tipstonga",
         "market": "Full Time Result",
         "selection": "Lazio"
+      }
+    ],
+    "2026-10-27|benevento|catanzaro": [
+      {
+        "author": "tipstonga",
+        "market": "Full Time Result",
+        "selection": "Benevento"
       }
     ]
   }
