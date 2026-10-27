@@ -311,7 +311,16 @@ jobs:
 
               return list(unique.values())
 
-          def parse_tipstonga(text):
+          def parse_tipstonga(text):              print("TIPSTONGA PAGE DIAGNOSTICS")
+              print("Contains tipstonga:",
+                    "tipstonga" in text.lower())
+              print("Contains Sassuolo:",
+                    "sassuolo" in text.lower())
+              print("Contains Full Time Result:",
+                    "full time result" in text.lower())
+              print("PAGE TEXT START:")
+              print(text[:5000])
+              print("PAGE TEXT END")
               # OLBG football profile, not general Tips page.
               if not re.search(
                   r"tipstonga['’]s tips",
