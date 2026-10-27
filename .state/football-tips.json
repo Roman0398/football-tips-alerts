@@ -41,7 +41,7 @@
   "source_status": {
     "Geobetting": {
       "status": "✅ поточні: 0 прогнозів",
-      "checked_at": "28.10.2026 00:48",
+      "checked_at": "28.10.2026 00:53",
       "method": "HTTP",
       "checks": [
         "current:empty(0)",
@@ -50,7 +50,7 @@
     },
     "tipstonga": {
       "status": "✅ поточні: 0 прогнозів",
-      "checked_at": "28.10.2026 00:48",
+      "checked_at": "28.10.2026 00:54",
       "method": "HTTP",
       "checks": [
         "current:empty(0)",
