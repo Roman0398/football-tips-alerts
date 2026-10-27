@@ -161,7 +161,20 @@ jobs:
                       "Opened:", page.url,
                       "characters:", len(text)
                   )
-                  return text
+                  return text        if "13000" in url:
+            html = page.content()
+            print("ODDS HTML DIAGNOSTICS")
+            found = list(re.finditer(
+                r"WIN\s*@", html, re.I
+            ))
+            print("WIN markers:", len(found))
+            for match in found[:4]:
+                print("ODDS HTML START")
+                print(html[
+                    max(0, match.start() - 300):
+                    match.end() + 600
+                ])
+                print("ODDS HTML END")
               finally:
                   page.close()
 
