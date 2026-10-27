@@ -40,23 +40,14 @@
   "unavailable_sources": [],
   "source_status": {
     "Geobetting": {
-      "status": "✅ поточні: 0 прогнозів",
-      "checked_at": "28.10.2026 00:53",
-      "method": "HTTP",
-      "checks": [
-        "current:empty(0)",
-        "history:ok"
-      ]
+      "status": "✅ 0 поточних",
+      "checked_at": "28.10.2026 01:18",
+      "details": "http; "
     },
     "tipstonga": {
-      "status": "✅ поточні: 0 прогнозів",
-      "checked_at": "28.10.2026 00:54",
-      "method": "HTTP",
-      "checks": [
-        "current:empty(0)",
-        "history:ok",
-        "profile:ok"
-      ]
+      "status": "✅ 0 поточних",
+      "checked_at": "28.10.2026 01:18",
+      "details": "http; "
     }
   }
 }
