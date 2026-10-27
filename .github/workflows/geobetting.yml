@@ -50,6 +50,7 @@ jobs:
           from datetime import datetime, timedelta
           from pathlib import Path
           from zoneinfo import ZoneInfo
+
           from bs4 import BeautifulSoup
           from playwright.sync_api import sync_playwright
 
@@ -59,6 +60,8 @@ jobs:
           }
 
           STATE = Path(".state/football-tips.json")
+          KYIV = ZoneInfo("Europe/Kyiv")
+          LONDON = ZoneInfo("Europe/London")
 
           MARKETS = {
               "Full Time Result": "Результат матчу",
@@ -145,9 +148,8 @@ jobs:
                       timeout=45000
                   )
                   if response and response.status >= 400:
-                      raise RuntimeError(
-                          "HTTP " + str(response.status)
-                      )
+                      raise RuntimeError("HTTP " + str(response.status))
+
                   try:
                       page.get_by_text(
                           "Accept all", exact=True
@@ -160,20 +162,18 @@ jobs:
                       timeout=12000
                   )
                   html = page.content()
-                  print(
-                      "Opened:", page.url,
-                      "characters:", len(text)
-                  )
+
+                  print("Opened:", page.url, "characters:", len(text))
                   return text, html
               finally:
                   page.close()
 
           def parse_geobetting(text):
               lower = text.lower()
+
               if "geobetting's tips" not in lower:
-                  raise RuntimeError(
-                      "Geobetting heading missing"
-                  )
+                  raise RuntimeError("Geobetting heading missing")
+
               if "geobetting has no current tips" in lower:
                   print("Geobetting: no active tips")
                   return []
@@ -209,13 +209,11 @@ jobs:
                       clock, home, away = fixture.groups()
                       continue
 
-                  if (
-                      line not in MARKETS
-                      or not day or not home or i == 0
-                  ):
+                  if line not in MARKETS or not day or not home or i == 0:
                       continue
 
                   selection = lines[i - 1]
+
                   if (
                       selection in MARKETS
                       or selection in ("@", "WIN", "50 WIN")
@@ -225,22 +223,17 @@ jobs:
                       continue
 
                   results.append(make_tip(
-                      "Geobetting", day, clock, home,
-                      away, line, selection
+                      "Geobetting", day, clock,
+                      home, away, line, selection
                   ))
 
               unique = {x["id"]: x for x in results}
-              print(
-                  "Geobetting: recognized",
-                  len(unique), "tips"
-              )
+              print("Geobetting: recognized", len(unique), "tips")
 
               if not unique and any(
                   DATE.fullmatch(x) for x in lines
               ):
-                  raise RuntimeError(
-                      "Geobetting active tips not parsed"
-                  )
+                  raise RuntimeError("Geobetting active tips not parsed")
 
               return list(unique.values())
 
@@ -253,26 +246,19 @@ jobs:
               if not any(
                   x.casefold() == "tipstonga" for x in lines
               ):
-                  raise RuntimeError(
-                      "tipstonga profile missing"
-                  )
+                  raise RuntimeError("tipstonga profile missing")
 
               if "Today Tips" not in lines:
-                  raise RuntimeError(
-                      "tipstonga Today Tips section missing"
-                  )
+                  raise RuntimeError("tipstonga Today Tips section missing")
 
               lines = lines[lines.index("Today Tips") + 1:]
+
               for i, line in enumerate(lines):
-                  if line.startswith(
-                      "Profits calculated to a"
-                  ):
+                  if line.startswith("Profits calculated to a"):
                       lines = lines[:i]
                       break
 
-              today = datetime.now(
-                  ZoneInfo("Europe/London")
-              ).date()
+              today = datetime.now(LONDON).date()
               results = []
               fixtures_found = 0
 
@@ -288,8 +274,7 @@ jobs:
                   if (
                       selection in MARKETS
                       or selection in (
-                          "SELECTION", "WIN",
-                          "ODDS", "VALUE RATING"
+                          "SELECTION", "WIN", "ODDS", "VALUE RATING"
                       )
                       or len(selection) > 100
                   ):
@@ -300,6 +285,7 @@ jobs:
                       (x for x in following if x in MARKETS),
                       None
                   )
+
                   if not market:
                       continue
 
@@ -308,17 +294,14 @@ jobs:
 
                   for j, value in enumerate(following):
                       if value in ("Today", "Tomorrow"):
-                          offset = (
-                              1 if value == "Tomorrow" else 0
-                          )
+                          offset = 1 if value == "Tomorrow" else 0
                           day = (
                               today + timedelta(days=offset)
                           ).isoformat()
+
                           if (
                               j + 1 < len(following)
-                              and CLOCK.fullmatch(
-                                  following[j + 1]
-                              )
+                              and CLOCK.fullmatch(following[j + 1])
                           ):
                               clock = following[j + 1]
                           break
@@ -331,8 +314,7 @@ jobs:
 
                   if not day or not clock:
                       raise RuntimeError(
-                          "tipstonga date/time not parsed: "
-                          + item
+                          "tipstonga date/time not parsed: " + item
                       )
 
                   results.append(make_tip(
@@ -341,6 +323,7 @@ jobs:
                   ))
 
               unique = {x["id"]: x for x in results}
+
               print(
                   "tipstonga: recognized",
                   len(unique), "football tips"
@@ -364,16 +347,12 @@ jobs:
               if not tips:
                   return
 
-              soup = BeautifulSoup(
-                  html, "html.parser"
-              )
+              soup = BeautifulSoup(html, "html.parser")
               odds_nodes = soup.select(
                   "span.ui-odds[data-decimal]"
               )
-              print(
-                  "HTML decimal odds nodes:",
-                  len(odds_nodes)
-              )
+
+              print("HTML decimal odds nodes:", len(odds_nodes))
 
               candidates = {
                   tip["id"]: set() for tip in tips
@@ -381,13 +360,11 @@ jobs:
 
               for node in odds_nodes:
                   raw = node.get("data-decimal", "")
-                  if not re.fullmatch(
-                      r"\d+(?:\.\d+)?", raw
-                  ):
+
+                  if not re.fullmatch(r"\d+(?:\.\d+)?", raw):
                       continue
 
-                  number = float(raw)
-                  if not 1.01 <= number <= 1000:
+                  if not 1.01 <= float(raw) <= 1000:
                       continue
 
                   for parent in node.parents:
@@ -396,9 +373,7 @@ jobs:
                       ):
                           break
 
-                      body = " ".join(
-                          parent.stripped_strings
-                      )
+                      body = " ".join(parent.stripped_strings)
 
                       if len(body) > 3500:
                           break
@@ -415,25 +390,24 @@ jobs:
                           )
 
                           if re.search(
-                              fixture_pattern,
-                              body, re.I
+                              fixture_pattern, body, re.I
                           ):
                               belonging.append(tip)
 
                       if len(belonging) == 1:
-                          if len(parent.select(
+                          count = len(parent.select(
                               "span.ui-odds[data-decimal]"
-                          )) == 1:
+                          ))
+
+                          if count == 1:
                               tip = belonging[0]
+                              body_lower = body.casefold()
+
                               if (
-                                  tip["selection"].casefold()
-                                  in body.casefold()
-                                  and tip["market"].casefold()
-                                  in body.casefold()
+                                  tip["selection"].casefold() in body_lower
+                                  and tip["market"].casefold() in body_lower
                               ):
-                                  candidates[
-                                      tip["id"]
-                                  ].add(raw)
+                                  candidates[tip["id"]].add(raw)
                           break
 
               for tip in tips:
@@ -444,24 +418,20 @@ jobs:
                       print(
                           "Verified odds:",
                           tip["author"],
-                          tip["home"], "v",
-                          tip["away"],
+                          tip["home"], "v", tip["away"],
                           tip["odds"]
                       )
                   else:
                       print(
                           "Odds unavailable/unverified:",
                           tip["author"],
-                          tip["home"], "v",
-                          tip["away"]
+                          tip["home"], "v", tip["away"]
                       )
 
           def translate(selection, market):
               s = selection.strip()
 
-              if market in (
-                  "Full Time Result", "Result"
-              ):
+              if market in ("Full Time Result", "Result"):
                   if s.casefold() in ("draw", "x"):
                       return "Нічия"
                   return "Перемога: " + s
@@ -472,27 +442,17 @@ jobs:
                   if s.lower().startswith("no"):
                       return "Ні"
 
-              s = re.sub(
-                  r"^Over\s+", "Більше ", s, flags=re.I
-              )
-              s = re.sub(
-                  r"^Under\s+", "Менше ", s, flags=re.I
-              )
-              s = s.replace(
-                  "(AH)", "(азійська фора)"
-              )
-              return re.sub(
-                  r"(?<=\d)\.(?=\d)", ",", s
-              )
+              s = re.sub(r"^Over\s+", "Більше ", s, flags=re.I)
+              s = re.sub(r"^Under\s+", "Менше ", s, flags=re.I)
+              s = s.replace("(AH)", "(азійська фора)")
+              return re.sub(r"(?<=\d)\.(?=\d)", ",", s)
 
           def telegram(message):
               token = os.getenv("BOT_TOKEN")
               chat = os.getenv("CHAT_ID")
 
               if not token or not chat:
-                  raise RuntimeError(
-                      "Telegram secrets missing"
-                  )
+                  raise RuntimeError("Telegram secrets missing")
 
               url = (
                   "https://api.telegram.org/bot"
@@ -511,9 +471,7 @@ jobs:
                   answer = json.load(response)
 
               if not answer.get("ok"):
-                  raise RuntimeError(
-                      "Telegram delivery failed"
-                  )
+                  raise RuntimeError("Telegram delivery failed")
 
           def save_state(state):
               STATE.parent.mkdir(
@@ -534,8 +492,7 @@ jobs:
               )
 
               changed = subprocess.run([
-                  "git", "diff",
-                  "--cached", "--quiet"
+                  "git", "diff", "--cached", "--quiet"
               ])
 
               if changed.returncode == 0:
@@ -543,25 +500,20 @@ jobs:
 
               subprocess.run([
                   "git",
-                  "-c",
-                  "user.name=github-actions[bot]",
+                  "-c", "user.name=github-actions[bot]",
                   "-c",
                   "user.email=41898282+github-actions[bot]@users.noreply.github.com",
                   "commit",
-                  "-m",
-                  "Update football tips history",
+                  "-m", "Update football tips history",
               ], check=True)
 
               subprocess.run([
-                  "git", "push",
-                  "origin", "HEAD:main"
+                  "git", "push", "origin", "HEAD:main"
               ], check=True)
 
           if STATE.exists():
               state = json.loads(
-                  STATE.read_text(
-                      encoding="utf-8"
-                  )
+                  STATE.read_text(encoding="utf-8")
               )
           else:
               state = {
@@ -571,6 +523,7 @@ jobs:
 
           seen = set(state.get("seen", []))
           matches = state.get("matches", {})
+          snapshots = state.get("snapshots", {})
           all_tips = []
           errors = []
 
@@ -578,13 +531,12 @@ jobs:
               browser = playwright.chromium.launch(
                   headless=True
               )
+
               try:
                   for author, url in SOURCES.items():
                       try:
                           print("Checking:", author)
-                          text, html = page_data(
-                              browser, url
-                          )
+                          text, html = page_data(browser, url)
 
                           if author == "Geobetting":
                               tips = parse_geobetting(text)
@@ -596,9 +548,7 @@ jobs:
 
                       except Exception as exc:
                           errors.append(author)
-                          print(
-                              "ERROR:", author, str(exc)
-                          )
+                          print("ERROR:", author, str(exc))
               finally:
                   browser.close()
 
@@ -606,6 +556,7 @@ jobs:
               tip for tip in all_tips
               if tip["id"] not in seen
           ]
+
           print("New tips:", len(pending))
 
           current_matches = {}
@@ -615,9 +566,22 @@ jobs:
               ).append(tip)
 
           for tip in pending:
-              fixture = (
-                  tip["home"] + " — " + tip["away"]
-              )
+              now = datetime.now(KYIV)
+
+              if tip["id"] not in snapshots:
+                  snapshots[tip["id"]] = {
+                      "author": tip["author"],
+                      "fixture": tip["home"] + " v " + tip["away"],
+                      "selection": tip["selection"],
+                      "market": tip["market"],
+                      "odds_first_seen": tip["odds"],
+                      "first_seen_at": now.isoformat(timespec="seconds"),
+                      "source": tip["url"],
+                  }
+
+              snapshot = snapshots[tip["id"]]
+              fixture = tip["home"] + " — " + tip["away"]
+
               message = (
                   "⚽ НОВИЙ ПРОГНОЗ\n\n"
                   f"👤 Каппер: {tip['author']}\n"
@@ -630,13 +594,13 @@ jobs:
 
               if tip["time"]:
                   message += (
-                      f"🕒 Час OLBG: {tip['time']}\n"
+                      f"🕒 Час матчу OLBG: {tip['time']}\n"
                   )
 
-              if tip["odds"] is not None:
-                  odds_ua = tip["odds"].replace(
-                      ".", ","
-                  )
+              fixed_odds = snapshot["odds_first_seen"]
+
+              if fixed_odds is not None:
+                  odds_ua = fixed_odds.replace(".", ",")
                   message += (
                       f"💰 Коефіцієнт OLBG: {odds_ua}\n"
                   )
@@ -644,6 +608,16 @@ jobs:
                   message += (
                       "💰 Коефіцієнт OLBG: недоступний\n"
                   )
+
+              observed = datetime.fromisoformat(
+                  snapshot["first_seen_at"]
+              ).astimezone(KYIV)
+
+              message += (
+                  "🕘 Зафіксовано ботом: "
+                  + observed.strftime("%d.%m.%Y о %H:%M")
+                  + " (Київ)\n"
+              )
 
               previous = matches.get(
                   tip["match_key"], []
@@ -654,6 +628,7 @@ jobs:
                   old_author = old.get(
                       "author", old.get("tipster")
                   )
+
                   if old_author != tip["author"]:
                       other.append({
                           "author": old_author,
@@ -681,6 +656,7 @@ jobs:
                       "Другий каппер теж має прогноз "
                       "на цей матч:\n"
                   )
+
                   for old in other:
                       market_label = MARKETS.get(
                           old["market"], old["market"]
@@ -690,13 +666,11 @@ jobs:
                           f"{market_label} — "
                           f"{translate(old['selection'], old['market'])}\n"
                       )
-                  message += (
-                      "Врахуй сумарний ризик.\n"
-                  )
+
+                  message += "Врахуй сумарний ризик.\n"
 
               message += (
-                  "\n📌 Перевір поточний коефіцієнт "
-                  "у букмекера"
+                  "\n📌 Порівняй цей коефіцієнт із BetKing"
                   "\n🔗 " + tip["url"]
               )
 
@@ -708,9 +682,7 @@ jobs:
               )
 
               if not any(
-                  x.get(
-                      "author", x.get("tipster")
-                  ) == tip["author"]
+                  x.get("author", x.get("tipster")) == tip["author"]
                   and x.get("market") == tip["market"]
                   and x.get("selection") == tip["selection"]
                   for x in old_entries
@@ -724,17 +696,19 @@ jobs:
               save_state({
                   "seen": sorted(seen),
                   "matches": matches,
+                  "snapshots": snapshots,
               })
 
               print(
-                  "Sent:", tip["author"],
-                  fixture, tip["selection"]
+                  "Sent and saved:",
+                  tip["author"], fixture,
+                  "first odds:", fixed_odds,
+                  "at:", snapshot["first_seen_at"]
               )
 
           if errors:
               raise RuntimeError(
-                  "Failed sources: "
-                  + ", ".join(errors)
+                  "Failed sources: " + ", ".join(errors)
               )
 
           print("Monitoring complete")
