@@ -161,7 +161,7 @@ jobs:
                       "Opened:", page.url,
                       "characters:", len(text)
                   )
-                  return text        if "13000" in url:
+                  return text                if "13000" in url:
             html = page.content()
             print("ODDS HTML DIAGNOSTICS")
             found = list(re.finditer(
@@ -175,6 +175,8 @@ jobs:
                     match.end() + 600
                 ])
                 print("ODDS HTML END")
+
+        return text
               finally:
                   page.close()
 
