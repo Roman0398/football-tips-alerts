@@ -16,6 +16,7 @@ concurrency:
 jobs:
   monitor:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -33,25 +34,30 @@ jobs:
           BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
-          python3 - <<'PY'
-          import hashlib
+          python3 -u - <<'PY'
           import json
           import os
           import re
+          import hashlib
           import subprocess
           import unicodedata
           import urllib.parse
           import urllib.request
-          from datetime import datetime
           from pathlib import Path
+          from datetime import datetime, timedelta
+          from zoneinfo import ZoneInfo
           from playwright.sync_api import sync_playwright
 
-          TIPSTERS = {
-              "Geobetting": "420769",
-              "tipstonga": "13000",
+          SOURCES = {
+              "Geobetting": (
+                  "https://www.olbg.com/tipsters/tips/420769"
+              ),
+              "tipstonga": (
+                  "https://www.olbg.com/best-tipsters/Football/1/13000"
+              ),
           }
 
-          STATE_FILE = Path(".state/football-tips.json")
+          STATE_PATH = Path(".state/football-tips.json")
 
           MARKETS = {
               "Full Time Result": "Результат матчу",
@@ -59,35 +65,19 @@ jobs:
               "Total Goals": "Тотал голів",
               "Both Teams to Score": "Обидві заб'ють",
               "Asian Hcap": "Азійська фора",
-              "Result and BTTS": "Результат + обидві заб'ють",
-              "Total Corners": "Тотал кутових",
-              "Total Cards": "Тотал карток",
+              "Result and BTTS": "Результат + ОЗ",
+              "Total Corners": "Кутові",
+              "Total Cards": "Картки",
               "Correct Score": "Точний рахунок",
-              "Half Time Result": "Результат першого тайму",
+              "Half Time Result": "Результат 1-го тайму",
               "Half Time/Full Time": "Тайм / матч",
               "Anytime Goalscorer": "Автор гола",
-              "First Goalscorer": "Перший автор гола",
-          }
-
-          MONTHS = {
-              "January": "січня",
-              "February": "лютого",
-              "March": "березня",
-              "April": "квітня",
-              "May": "травня",
-              "June": "червня",
-              "July": "липня",
-              "August": "серпня",
-              "September": "вересня",
-              "October": "жовтня",
-              "November": "листопада",
-              "December": "грудня",
+              "First Goalscorer": "Перший гол",
           }
 
           ALIASES = {
               "man utd": "manchester united",
               "man united": "manchester united",
-              "manchester utd": "manchester united",
               "man city": "manchester city",
               "spurs": "tottenham hotspur",
               "tottenham": "tottenham hotspur",
@@ -98,14 +88,8 @@ jobs:
               "bayern munchen": "bayern munich",
               "psg": "paris saint germain",
               "paris sg": "paris saint germain",
-              "atletico de madrid": "atletico madrid",
               "barca": "barcelona",
               "fc barcelona": "barcelona",
-              "copenhagen": "kobenhavn",
-              "fc copenhagen": "kobenhavn",
-              "red star belgrade": "crvena zvezda",
-              "olympiakos": "olympiacos",
-              "sporting cp": "sporting lisbon",
               "roma": "as roma",
               "as monaco": "monaco",
               "leverkusen": "bayer leverkusen",
@@ -113,6 +97,9 @@ jobs:
               "newcastle": "newcastle united",
               "west ham": "west ham united",
               "nottm forest": "nottingham forest",
+              "copenhagen": "kobenhavn",
+              "fc copenhagen": "kobenhavn",
+              "red star belgrade": "crvena zvezda",
           }
 
           DATE_RE = re.compile(
@@ -120,11 +107,28 @@ jobs:
           )
 
           FIXTURE_RE = re.compile(
-              r"^(?:(\d{1,2}:\d{2})\s+)?(.+?)\s+v\s+(.+)$",
-              re.I,
+              r"^(?:(\d{1,2}:\d{2})\s+)?"
+              r"(.+?)\s+v\s+(.+)$",
+              re.I
           )
 
-          def normalize_team(name):
+          TIME_RE = re.compile(
+              r"^(Today|Tomorrow)\s+"
+              r"(\d{1,2}:\d{2})$",
+              re.I
+          )
+
+          def uk_now():
+              return datetime.now(
+                  ZoneInfo("Europe/Kyiv")
+              )
+
+          def london_today():
+              return datetime.now(
+                  ZoneInfo("Europe/London")
+              ).date()
+
+          def normalize(name):
               value = unicodedata.normalize(
                   "NFKD", name.casefold()
               )
@@ -138,62 +142,342 @@ jobs:
               value = re.sub(r"\s+", " ", value)
               return ALIASES.get(value, value)
 
-          def match_key(day, home, away):
+          def fixture_key(day, home, away):
               teams = sorted([
-                  normalize_team(home),
-                  normalize_team(away),
+                  normalize(home),
+                  normalize(away)
               ])
               return day + "|" + "|".join(teams)
 
+          def tip_record(
+              author, day, time, home,
+              away, market, selection
+          ):
+              key = fixture_key(day, home, away)
+
+              raw = "|".join([
+                  author, key,
+                  market, selection.casefold()
+              ])
+
+              tip_id = hashlib.sha256(
+                  raw.encode("utf-8")
+              ).hexdigest()
+
+              return {
+                  "id": tip_id,
+                  "author": author,
+                  "date": day,
+                  "time": time,
+                  "home": home,
+                  "away": away,
+                  "market": market,
+                  "selection": selection,
+                  "match_key": key,
+                  "url": SOURCES[author],
+              }
+
+          def extract_page(browser, url):
+              page = browser.new_page(
+                  viewport={
+                      "width": 1280,
+                      "height": 900,
+                  }
+              )
+
+              try:
+                  response = page.goto(
+                      url,
+                      wait_until="domcontentloaded",
+                      timeout=35000
+                  )
+
+                  if response and response.status >= 400:
+                      raise RuntimeError(
+                          "HTTP " + str(response.status)
+                      )
+
+                  try:
+                      page.get_by_text(
+                          "Accept all", exact=True
+                      ).last.click(timeout=1800)
+                  except Exception:
+                      pass
+
+                  page.wait_for_timeout(3000)
+
+                  actual_url = page.url
+                  text = page.locator(
+                      "body"
+                  ).inner_text(timeout=12000)
+
+                  print(
+                      "Opened:",
+                      actual_url,
+                      "characters:",
+                      len(text)
+                  )
+
+                  return text
+
+              finally:
+                  page.close()
+
+          def parse_geobetting(text):
+              if "geobetting's tips" not in text.lower():
+                  raise RuntimeError(
+                      "Geobetting heading missing"
+                  )
+
+              if "geobetting has no current tips" in text.lower():
+                  print("Geobetting: no active tips")
+                  return []
+
+              lines = [
+                  x.strip()
+                  for x in text.splitlines()
+                  if x.strip()
+              ]
+
+              start = next(
+                  i for i, x in enumerate(lines)
+                  if "geobetting's tips" in x.lower()
+              )
+
+              lines = lines[start + 1:]
+
+              for i, line in enumerate(lines):
+                  if "Tips are normally settled" in line:
+                      lines = lines[:i]
+                      break
+
+              day = None
+              home = None
+              away = None
+              clock = None
+              results = []
+
+              for i, line in enumerate(lines):
+                  if DATE_RE.fullmatch(line):
+                      day = datetime.strptime(
+                          line, "%d %B %Y"
+                      ).date().isoformat()
+                      home = away = clock = None
+                      continue
+
+                  fm = FIXTURE_RE.fullmatch(line)
+
+                  if fm and day:
+                      clock, home, away = fm.groups()
+                      continue
+
+                  if (
+                      line not in MARKETS
+                      or not day or not home or i == 0
+                  ):
+                      continue
+
+                  selection = lines[i - 1]
+
+                  if (
+                      selection in MARKETS
+                      or selection in ("@", "WIN", "50 WIN")
+                      or FIXTURE_RE.fullmatch(selection)
+                      or len(selection) > 120
+                  ):
+                      continue
+
+                  results.append(tip_record(
+                      "Geobetting",
+                      day, clock,
+                      home, away, line, selection
+                  ))
+
+              unique = {
+                  x["id"]: x for x in results
+              }
+
+              print(
+                  "Geobetting: recognized",
+                  len(unique), "tips"
+              )
+
+              if not unique and any(
+                  DATE_RE.fullmatch(x) for x in lines
+              ):
+                  raise RuntimeError(
+                      "Geobetting tips not parsed"
+                  )
+
+              return list(unique.values())
+
+          def parse_tipstonga(text):
+              # OLBG football profile, not general Tips page.
+              if not re.search(
+                  r"tipstonga['’]s tips",
+                  text, re.I
+              ):
+                  raise RuntimeError(
+                      "tipstonga football heading missing"
+                  )
+
+              lines = [
+                  x.strip()
+                  for x in text.splitlines()
+                  if x.strip()
+              ]
+
+              start = next(
+                  i for i, x in enumerate(lines)
+                  if re.search(
+                      r"tipstonga['’]s tips",
+                      x, re.I
+                  )
+              )
+
+              lines = lines[start + 1:]
+
+              for i, line in enumerate(lines):
+                  if line.startswith(
+                      "Profits calculated to a"
+                  ):
+                      lines = lines[:i]
+                      break
+
+              results = []
+              today = london_today()
+
+              # OLBG football profile order:
+              # Selection -> Fixture -> Market -> Today HH:MM
+              for i, item in enumerate(lines):
+                  fm = FIXTURE_RE.fullmatch(item)
+
+                  if not fm or i == 0:
+                      continue
+
+                  clock_in_fixture, home, away = fm.groups()
+                  selection = lines[i - 1]
+
+                  if (
+                      selection in MARKETS
+                      or selection.startswith("Today Tips")
+                      or selection.startswith("Tomorrow Tips")
+                      or len(selection) > 100
+                  ):
+                      continue
+
+                  following = lines[
+                      i + 1:i + 5
+                  ]
+
+                  market = next(
+                      (
+                          x for x in following
+                          if x in MARKETS
+                      ),
+                      None
+                  )
+
+                  if not market:
+                      continue
+
+                  day = None
+                  clock = clock_in_fixture
+
+                  for item2 in following:
+                      tm = TIME_RE.fullmatch(item2)
+
+                      if tm:
+                          offset = (
+                              1 if tm.group(1).lower()
+                              == "tomorrow" else 0
+                          )
+                          day = (
+                              today + timedelta(days=offset)
+                          ).isoformat()
+                          clock = tm.group(2)
+                          break
+
+                      if DATE_RE.fullmatch(item2):
+                          day = datetime.strptime(
+                              item2, "%d %B %Y"
+                          ).date().isoformat()
+                          break
+
+                  if day is None:
+                      raise RuntimeError(
+                          "tipstonga match date unknown: "
+                          + item
+                      )
+
+                  results.append(tip_record(
+                      "tipstonga",
+                      day, clock,
+                      home, away,
+                      market, selection
+                  ))
+
+              unique = {
+                  x["id"]: x for x in results
+              }
+
+              print(
+                  "tipstonga: recognized",
+                  len(unique), "football tips"
+              )
+
+              # No fixtures: valid empty tip list.
+              if not unique and any(
+                  FIXTURE_RE.fullmatch(x)
+                  for x in lines
+              ):
+                  raise RuntimeError(
+                      "tipstonga fixtures not parsed"
+                  )
+
+              return list(unique.values())
+
           def translate(selection, market):
-              value = selection.strip()
+              s = selection.strip()
 
-              if market in (
-                  "Full Time Result", "Result"
-              ):
-                  if value.lower() in ("draw", "x"):
+              if market in ("Full Time Result", "Result"):
+                  if s.casefold() in ("draw", "x"):
                       return "Нічия"
-                  return "Перемога: " + value
+                  return "Перемога: " + s
 
               if re.fullmatch(
-                  r"Yes\s*\(BTTS\)", value, re.I
-              ):
-                  return "Обидві заб'ють — Так"
+                  r"Yes(?:\s*\(BTTS\))?",
+                  s, re.I
+              ) and market == "Both Teams to Score":
+                  return "Так"
 
               if re.fullmatch(
-                  r"No\s*\(BTTS\)", value, re.I
-              ):
-                  return "Обидві заб'ють — Ні"
+                  r"No(?:\s*\(BTTS\))?",
+                  s, re.I
+              ) and market == "Both Teams to Score":
+                  return "Ні"
 
-              value = re.sub(
-                  r"^Over\s+", "Більше ",
-                  value, flags=re.I
+              s = re.sub(
+                  r"^Over\s+", "Більше ", s, flags=re.I
               )
-              value = re.sub(
-                  r"^Under\s+", "Менше ",
-                  value, flags=re.I
+              s = re.sub(
+                  r"^Under\s+", "Менше ", s, flags=re.I
               )
-              value = value.replace(
+              s = s.replace(
                   "(AH)", "(азійська фора)"
               )
-              return re.sub(
-                  r"(?<=\d)\.(?=\d)", ",", value
-              )
 
-          def date_uk(day):
-              d = datetime.strptime(
-                  day, "%Y-%m-%d"
+              return re.sub(
+                  r"(?<=\d)\.(?=\d)", ",", s
               )
-              month = MONTHS[d.strftime("%B")]
-              return f"{d.day} {month} {d.year}"
 
           def send_telegram(message):
               token = os.getenv("BOT_TOKEN")
-              chat_id = os.getenv("CHAT_ID")
+              chat = os.getenv("CHAT_ID")
 
-              if not token or not chat_id:
+              if not token or not chat:
                   raise RuntimeError(
-                      "Telegram secrets are missing"
+                      "Missing Telegram secrets"
                   )
 
               url = (
@@ -202,7 +486,7 @@ jobs:
               )
 
               data = urllib.parse.urlencode({
-                  "chat_id": chat_id,
+                  "chat_id": chat,
                   "text": message,
                   "disable_notification": "false",
                   "disable_web_page_preview": "true",
@@ -215,254 +499,62 @@ jobs:
 
               if not result.get("ok"):
                   raise RuntimeError(
-                      "Telegram rejected the message"
+                      "Telegram did not confirm delivery"
                   )
-
-          def read_tips(browser, name, user_id):
-              url = (
-                  "https://www.olbg.com/tipsters/tips/"
-                  + user_id
-              )
-
-              page = browser.new_page(
-                  viewport={"width": 390, "height": 844}
-              )
-
-              try:
-                  page.goto(
-                      url,
-                      wait_until="domcontentloaded",
-                      timeout=60000,
-                  )
-
-                  try:
-                      page.get_by_text(
-                          "Accept all", exact=True
-                      ).last.click(timeout=2500)
-                  except Exception:
-                      pass
-
-                  page.wait_for_timeout(4000)
-
-                  body = page.locator(
-                      "body"
-                  ).inner_text()
-
-              finally:
-                  page.close()
-
-              title = name.lower() + "'s tips"
-
-              if title not in body.lower():
-                  raise RuntimeError(
-                      "Tips heading not found: " + name
-                  )
-
-              lines = [
-                  line.strip()
-                  for line in body.splitlines()
-                  if line.strip()
-              ]
-
-              start = next(
-                  i for i, line in enumerate(lines)
-                  if title in line.lower()
-              )
-
-              lines = lines[start + 1:]
-
-              # Only inspect the Current Tips section.
-              for i, line in enumerate(lines):
-                  if "Tips are normally settled" in line:
-                      lines = lines[:i]
-                      break
-
-              # Both OLBG empty-page variants:
-              # 1. "has no current tips"
-              # 2. Empty section with no dates or matches.
-              section = " ".join(lines).lower()
-
-              if "has no current tips" in section:
-                  print(name, ": no active tips")
-                  return []
-
-              has_date = any(
-                  DATE_RE.fullmatch(line)
-                  for line in lines
-              )
-
-              has_fixture = any(
-                  FIXTURE_RE.fullmatch(line)
-                  for line in lines
-              )
-
-              if not has_date and not has_fixture:
-                  print(
-                      name,
-                      ": no active tips (empty section)"
-                  )
-                  return []
-
-              if not has_date or not has_fixture:
-                  raise RuntimeError(
-                      "Unexpected tip format for " + name
-                  )
-
-              current_day = None
-              home = None
-              away = None
-              clock = None
-              results = []
-
-              for i, item in enumerate(lines):
-                  if DATE_RE.fullmatch(item):
-                      current_day = datetime.strptime(
-                          item, "%d %B %Y"
-                      ).date().isoformat()
-                      home = None
-                      away = None
-                      clock = None
-                      continue
-
-                  fixture = FIXTURE_RE.fullmatch(
-                      item
-                  )
-
-                  if fixture:
-                      clock, home, away = (
-                          fixture.groups()
-                      )
-                      continue
-
-                  if item not in MARKETS:
-                      continue
-
-                  if not home or not current_day:
-                      continue
-
-                  if i == 0:
-                      continue
-
-                  selection = lines[i - 1]
-
-                  if (
-                      not selection
-                      or selection in MARKETS
-                      or selection in ("@", "WIN", "50 WIN")
-                      or len(selection) > 120
-                      or FIXTURE_RE.fullmatch(selection)
-                  ):
-                      continue
-
-                  identity = match_key(
-                      current_day, home, away
-                  )
-
-                  raw = "|".join([
-                      name,
-                      identity,
-                      item,
-                      selection,
-                  ])
-
-                  tip_id = hashlib.sha256(
-                      raw.encode("utf-8")
-                  ).hexdigest()
-
-                  results.append({
-                      "id": tip_id,
-                      "tipster": name,
-                      "date": current_day,
-                      "clock": clock,
-                      "home": home,
-                      "away": away,
-                      "market": item,
-                      "selection": selection,
-                      "match_key": identity,
-                      "url": url,
-                  })
-
-              unique = {
-                  tip["id"]: tip
-                  for tip in results
-              }
-
-              print(
-                  name,
-                  ": recognized",
-                  len(unique),
-                  "tips"
-              )
-
-              if not unique:
-                  raise RuntimeError(
-                      "Active tips not parsed: " + name
-                  )
-
-              return list(unique.values())
 
           def save_state(state):
-              STATE_FILE.parent.mkdir(
-                  parents=True,
-                  exist_ok=True,
+              STATE_PATH.parent.mkdir(
+                  parents=True, exist_ok=True
               )
 
-              STATE_FILE.write_text(
+              STATE_PATH.write_text(
                   json.dumps(
                       state,
                       ensure_ascii=False,
-                      indent=2,
+                      indent=2
                   ),
-                  encoding="utf-8",
+                  encoding="utf-8"
               )
 
               subprocess.run([
-                  "git", "add", str(STATE_FILE)
+                  "git", "add", str(STATE_PATH)
               ], check=True)
 
               diff = subprocess.run([
-                  "git", "diff",
-                  "--cached", "--quiet",
+                  "git", "diff", "--cached", "--quiet"
               ])
 
               if diff.returncode == 0:
                   return
 
               subprocess.run([
-                  "git",
-                  "-c",
+                  "git", "-c",
                   "user.name=github-actions[bot]",
                   "-c",
                   "user.email=41898282+github-actions[bot]@users.noreply.github.com",
-                  "commit",
-                  "-m",
-                  "Save football tips state",
+                  "commit", "-m",
+                  "Update football alerts history"
               ], check=True)
 
               subprocess.run([
                   "git", "push",
-                  "origin", "HEAD:main",
+                  "origin", "HEAD:main"
               ], check=True)
 
-          if STATE_FILE.exists():
+          if STATE_PATH.exists():
               state = json.loads(
-                  STATE_FILE.read_text(
+                  STATE_PATH.read_text(
                       encoding="utf-8"
                   )
               )
           else:
               state = {
                   "seen": [],
-                  "matches": {},
+                  "matches": {}
               }
 
-          seen = set(
-              state.get("seen", [])
-          )
-
-          matches = state.get(
-              "matches", {}
-          )
+          seen = set(state.get("seen", []))
+          matches = state.get("matches", {})
 
           collected = []
           errors = []
@@ -473,28 +565,32 @@ jobs:
               )
 
               try:
-                  for name, user_id in TIPSTERS.items():
+                  for author, url in SOURCES.items():
                       try:
-                          tips = read_tips(
-                              browser,
-                              name,
-                              user_id,
+                          print("Checking:", author)
+
+                          text = extract_page(
+                              browser, url
                           )
+
+                          if author == "Geobetting":
+                              tips = parse_geobetting(text)
+                          else:
+                              tips = parse_tipstonga(text)
+
                           collected.extend(tips)
 
-                      except Exception as error:
-                          errors.append(name)
+                      except Exception as exc:
                           print(
-                              "ERROR:",
-                              name,
-                              str(error),
+                              "ERROR:", author, str(exc)
                           )
+                          errors.append(author)
               finally:
                   browser.close()
 
           pending = [
-              tip for tip in collected
-              if tip["id"] not in seen
+              x for x in collected
+              if x["id"] not in seen
           ]
 
           print("New tips:", len(pending))
@@ -505,54 +601,47 @@ jobs:
               )
 
               other = [
-                  p for p in previous
-                  if p["tipster"] != tip["tipster"]
+                  x for x in previous
+                  if x["author"] != tip["author"]
               ]
 
               fixture = (
-                  tip["home"]
-                  + " — "
-                  + tip["away"]
+                  tip["home"] + " — " + tip["away"]
               )
 
               message = (
                   "⚽ НОВИЙ ПРОГНОЗ\n\n"
-                  f"👤 Каппер: {tip['tipster']}\n"
+                  f"👤 Каппер: {tip['author']}\n"
                   f"🏟 Матч: {fixture}\n"
-                  f"📅 Дата: {date_uk(tip['date'])}\n"
+                  f"📅 Дата: {tip['date']}\n"
                   f"📊 Ринок: {MARKETS[tip['market']]}\n"
                   f"🎯 Ставка: "
                   f"{translate(tip['selection'], tip['market'])}\n"
               )
 
-              if tip["clock"]:
+              if tip["time"]:
                   message += (
-                      f"🕒 Час OLBG: {tip['clock']}\n"
+                      f"🕒 Час OLBG: {tip['time']}\n"
                   )
-
-              message += (
-                  "📌 Перевір коефіцієнт "
-                  "у букмекера\n"
-              )
 
               if other:
                   message += (
                       "\n⚠️ ЗБІГ ПРОГНОЗІВ!\n"
-                      "Інший каппер також "
-                      "обрав цей матч.\n"
+                      "Обидва каппери обрали цей матч.\n"
                   )
 
                   for old in other:
                       message += (
-                          f"• {old['tipster']}: "
+                          f"• {old['author']}: "
                           f"{translate(old['selection'], old['market'])}\n"
                       )
 
                   message += (
-                      "Врахуй сумарний ризик ставок.\n"
+                      "Врахуй сумарний ризик.\n"
                   )
 
               message += (
+                  "\n📌 Коефіцієнт перевір у букмекера"
                   "\n🔗 " + tip["url"]
               )
 
@@ -563,27 +652,26 @@ jobs:
               matches.setdefault(
                   tip["match_key"], []
               ).append({
-                  "tipster": tip["tipster"],
+                  "author": tip["author"],
                   "market": tip["market"],
                   "selection": tip["selection"],
               })
 
-              state = {
+              save_state({
                   "seen": sorted(seen),
                   "matches": matches,
-              }
-
-              save_state(state)
+              })
 
               print(
                   "Sent:",
-                  tip["tipster"],
+                  tip["author"],
                   fixture,
+                  tip["selection"]
               )
 
           if errors:
               raise RuntimeError(
-                  "Could not check: "
+                  "Failed sources: "
                   + ", ".join(errors)
               )
 
