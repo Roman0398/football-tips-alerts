@@ -29,6 +29,64 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Safely check Telegram secrets and connection
+        env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          CHAT_ID: ${{ secrets.CHAT_ID }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import re
+          import sys
+          import urllib.error
+          import urllib.parse
+          import urllib.request
+
+          token = os.environ.get('BOT_TOKEN', '').strip()
+          chat_id = os.environ.get('CHAT_ID', '').strip()
+
+          print('BOT_TOKEN:', 'SET' if token else 'EMPTY')
+          print('CHAT_ID:', 'SET' if chat_id else 'EMPTY')
+
+          if not token or not chat_id:
+              sys.exit('ERROR: Secrets empty or unavailable.')
+
+          if not re.fullmatch(r'\d+:[A-Za-z0-9_-]+', token):
+              sys.exit('ERROR: BOT_TOKEN format incorrect.')
+
+          if not re.fullmatch(r'-?\d+', chat_id):
+              sys.exit('ERROR: CHAT_ID must be numeric.')
+
+          def check(method, params=None):
+              url = 'https://api.telegram.org/bot' + token + '/' + method
+              body = urllib.parse.urlencode(params or {}).encode()
+              try:
+                  with urllib.request.urlopen(url, data=body, timeout=20) as res:
+                      data = json.load(res)
+              except urllib.error.HTTPError as exc:
+                  if exc.code == 401:
+                      sys.exit('ERROR: Invalid or revoked BOT_TOKEN.')
+                  if exc.code == 404:
+                      sys.exit('ERROR: Telegram HTTP 404: invalid token or URL.')
+                  if exc.code in (400, 403):
+                      sys.exit('ERROR: Chat inaccessible, HTTP ' + str(exc.code))
+                  sys.exit('ERROR: Telegram HTTP ' + str(exc.code))
+              except urllib.error.URLError:
+                  sys.exit('ERROR: Cannot connect to Telegram.')
+
+              if not data.get('ok'):
+                  sys.exit('ERROR: Telegram rejected request.')
+              return data.get('result')
+
+          info = check('getMe')
+          print('Telegram bot authentication: OK')
+          print('Bot username:', info.get('username', 'unknown'))
+          check('getChat', {'chat_id': chat_id})
+          print('Telegram chat access: OK')
+          print('Preflight complete.')
+          PY
+
       - name: Install browser
         run: |
           pip install playwright beautifulsoup4
@@ -59,9 +117,11 @@ jobs:
               'Geobetting': 'https://www.olbg.com/tipsters/tips/420769',
               'tipstonga': 'https://www.olbg.com/best-tipsters/Football/1/13000',
           }
+
           STATE = Path('.state/football-tips.json')
           KYIV = ZoneInfo('Europe/Kyiv')
           LONDON = ZoneInfo('Europe/London')
+
           MARKETS = {
               'Full Time Result': 'Результат матчу',
               'Result': 'Результат матчу',
@@ -77,6 +137,7 @@ jobs:
               'Anytime Goalscorer': 'Автор гола',
               'First Goalscorer': 'Перший гол',
           }
+
           ALIASES = {
               'man utd': 'manchester united',
               'man united': 'manchester united',
@@ -97,11 +158,15 @@ jobs:
               'west ham': 'west ham united',
               'nottm forest': 'nottingham forest',
           }
-          FIXTURE = re.compile(r'^(?:(\d{1,2}:\d{2})\s+)?(.+?)\s+v\s+(.+)$', re.I)
+
+          FIXTURE = re.compile(
+              r'^(?:(\d{1,2}:\d{2})\s+)?(.+?)\s+v\s+(.+)$', re.I
+          )
           DATE = re.compile(r'^\d{1,2} [A-Za-z]+ 20\d{2}$')
           CLOCK = re.compile(r'^\d{1,2}:\d{2}$')
-          token = os.environ['BOT_TOKEN']
-          chat_id = str(os.environ['CHAT_ID'])
+
+          token = os.environ['BOT_TOKEN'].strip()
+          chat_id = os.environ['CHAT_ID'].strip()
 
           def api(method, params=None):
               url = 'https://api.telegram.org/bot' + token + '/' + method
@@ -109,40 +174,59 @@ jobs:
               with urllib.request.urlopen(url, data=body, timeout=30) as response:
                   data = json.load(response)
               if not data.get('ok'):
-                  raise RuntimeError('Telegram API: ' + str(data.get('description')))
+                  raise RuntimeError('Telegram API error')
               return data['result']
 
           def send(message):
               api('sendMessage', {
-                  'chat_id': chat_id, 'text': message,
+                  'chat_id': chat_id,
+                  'text': message,
                   'disable_web_page_preview': 'true',
               })
 
           def normalize(name):
               value = unicodedata.normalize('NFKD', name.casefold())
-              value = ''.join(c for c in value if not unicodedata.combining(c))
+              value = ''.join(
+                  c for c in value if not unicodedata.combining(c)
+              )
               value = re.sub(r'[^a-z0-9]+', ' ', value).strip()
               return ALIASES.get(value, value)
 
           def make_tip(author, day, clock, home, away, market, selection):
-              match = day + '|' + '|'.join(sorted([normalize(home), normalize(away)]))
-              raw = '|'.join([author, match, market, selection.casefold().strip()])
+              match = day + '|' + '|'.join(
+                  sorted([normalize(home), normalize(away)])
+              )
+              raw = '|'.join([
+                  author, match, market, selection.casefold().strip()
+              ])
               return {
                   'id': hashlib.sha256(raw.encode()).hexdigest(),
-                  'author': author, 'date': day, 'time': clock,
-                  'home': home, 'away': away, 'market': market,
-                  'selection': selection, 'match_key': match,
-                  'url': SOURCES[author], 'odds': None,
+                  'author': author,
+                  'date': day,
+                  'time': clock,
+                  'home': home,
+                  'away': away,
+                  'market': market,
+                  'selection': selection,
+                  'match_key': match,
+                  'url': SOURCES[author],
+                  'odds': None,
               }
 
           def page_data(browser, url):
-              page = browser.new_page(viewport={'width': 1280, 'height': 900})
+              page = browser.new_page(
+                  viewport={'width': 1280, 'height': 900}
+              )
               try:
-                  response = page.goto(url, wait_until='domcontentloaded', timeout=45000)
+                  response = page.goto(
+                      url, wait_until='domcontentloaded', timeout=45000
+                  )
                   if response and response.status >= 400:
                       raise RuntimeError('HTTP ' + str(response.status))
                   try:
-                      page.get_by_text('Accept all', exact=True).last.click(timeout=2000)
+                      page.get_by_text(
+                          'Accept all', exact=True
+                      ).last.click(timeout=2000)
                   except Exception:
                       pass
                   page.wait_for_timeout(3500)
@@ -159,155 +243,274 @@ jobs:
               if 'geobetting has no current tips' in lower:
                   print('Geobetting: no active tips')
                   return []
-              lines = [v.strip() for v in text.splitlines() if v.strip()]
-              start = next(i for i, v in enumerate(lines) if "geobetting's tips" in v.casefold())
+
+              lines = [
+                  v.strip() for v in text.splitlines() if v.strip()
+              ]
+              start = next(
+                  i for i, v in enumerate(lines)
+                  if "geobetting's tips" in v.casefold()
+              )
               lines = lines[start + 1:]
+
               for i, line in enumerate(lines):
                   if 'Tips are normally settled' in line:
                       lines = lines[:i]
                       break
+
               day = home = away = clock = None
               found = []
+
               for i, line in enumerate(lines):
                   if DATE.fullmatch(line):
-                      day = datetime.strptime(line, '%d %B %Y').date().isoformat()
+                      day = datetime.strptime(
+                          line, '%d %B %Y'
+                      ).date().isoformat()
                       home = away = clock = None
                       continue
+
                   fixture = FIXTURE.fullmatch(line)
                   if fixture and day:
                       clock, home, away = fixture.groups()
                       continue
+
                   if line not in MARKETS or not day or not home or i == 0:
                       continue
+
                   selection = lines[i - 1]
-                  if (selection in MARKETS or selection in ('@', 'WIN', '50 WIN')
-                          or FIXTURE.fullmatch(selection) or len(selection) > 120):
+                  if (
+                      selection in MARKETS
+                      or selection in ('@', 'WIN', '50 WIN')
+                      or FIXTURE.fullmatch(selection)
+                      or len(selection) > 120
+                  ):
                       continue
-                  found.append(make_tip('Geobetting', day, clock, home, away, line, selection))
+
+                  found.append(make_tip(
+                      'Geobetting', day, clock, home,
+                      away, line, selection
+                  ))
+
               unique = {v['id']: v for v in found}
               print('Geobetting: recognized', len(unique), 'tips')
+
               if not unique and any(DATE.fullmatch(v) for v in lines):
                   raise RuntimeError('Geobetting active tips not parsed')
+
               return list(unique.values())
 
           def parse_tipstonga(text):
-              lines = [v.strip() for v in text.splitlines() if v.strip()]
-              if not any(v.casefold() == 'tipstonga' for v in lines):
+              lines = [
+                  v.strip() for v in text.splitlines() if v.strip()
+              ]
+              if not any(
+                  v.casefold() == 'tipstonga' for v in lines
+              ):
                   raise RuntimeError('tipstonga profile missing')
+
               if 'Today Tips' not in lines:
                   raise RuntimeError('tipstonga Today Tips section missing')
+
               lines = lines[lines.index('Today Tips') + 1:]
+
               for i, line in enumerate(lines):
                   if line.startswith('Profits calculated to a'):
                       lines = lines[:i]
                       break
+
               today = datetime.now(LONDON).date()
               found = []
               fixtures_found = 0
+
               for i, item in enumerate(lines):
                   fixture = FIXTURE.fullmatch(item)
                   if not fixture or i == 0:
                       continue
+
                   fixtures_found += 1
                   fixture_clock, home, away = fixture.groups()
                   selection = lines[i - 1]
-                  if (selection in MARKETS or selection in ('SELECTION', 'WIN', 'ODDS', 'VALUE RATING')
-                          or len(selection) > 100):
+
+                  if (
+                      selection in MARKETS
+                      or selection in (
+                          'SELECTION', 'WIN', 'ODDS', 'VALUE RATING'
+                      )
+                      or len(selection) > 100
+                  ):
                       continue
+
                   following = lines[i + 1:i + 8]
-                  market = next((v for v in following if v in MARKETS), None)
+                  market = next(
+                      (v for v in following if v in MARKETS), None
+                  )
                   if not market:
                       continue
+
                   day, clock = None, fixture_clock
+
                   for j, value in enumerate(following):
                       if value in ('Today', 'Tomorrow'):
-                          day = (today + timedelta(days=int(value == 'Tomorrow'))).isoformat()
-                          if j + 1 < len(following) and CLOCK.fullmatch(following[j + 1]):
+                          day = (
+                              today + timedelta(
+                                  days=int(value == 'Tomorrow')
+                              )
+                          ).isoformat()
+                          if (
+                              j + 1 < len(following)
+                              and CLOCK.fullmatch(following[j + 1])
+                          ):
                               clock = following[j + 1]
                           break
+
                       if DATE.fullmatch(value):
-                          day = datetime.strptime(value, '%d %B %Y').date().isoformat()
+                          day = datetime.strptime(
+                              value, '%d %B %Y'
+                          ).date().isoformat()
                           break
+
                   if not day or not clock:
-                      raise RuntimeError('tipstonga date/time not parsed: ' + item)
-                  found.append(make_tip('tipstonga', day, clock, home, away, market, selection))
+                      raise RuntimeError(
+                          'tipstonga date/time not parsed: ' + item
+                      )
+
+                  found.append(make_tip(
+                      'tipstonga', day, clock, home,
+                      away, market, selection
+                  ))
+
               unique = {v['id']: v for v in found}
-              print('tipstonga: recognized', len(unique), 'football tips')
+              print(
+                  'tipstonga: recognized',
+                  len(unique), 'football tips'
+              )
+
               if fixtures_found and len(unique) != fixtures_found:
                   raise RuntimeError('Some tipstonga fixtures not parsed')
+
               return list(unique.values())
 
           def add_verified_odds(html, tips):
               if not tips:
                   return
+
               soup = BeautifulSoup(html, 'html.parser')
               nodes = soup.select('span.ui-odds[data-decimal]')
               print('HTML decimal odds nodes:', len(nodes))
               candidates = {t['id']: set() for t in tips}
+
               for node in nodes:
                   raw = node.get('data-decimal', '')
-                  if not re.fullmatch(r'\d+(?:\.\d+)?', raw) or not 1.01 <= float(raw) <= 1000:
+                  if (
+                      not re.fullmatch(r'\d+(?:\.\d+)?', raw)
+                      or not 1.01 <= float(raw) <= 1000
+                  ):
                       continue
+
                   for parent in node.parents:
                       if parent.name in ('body', 'html', '[document]'):
                           break
+
                       body = ' '.join(parent.stripped_strings)
                       if len(body) > 3500:
                           break
+
                       belonging = []
                       for tip in tips:
-                          pattern = (r'(?<!\w)' + re.escape(tip['home'])
-                                     + r'\s+v\s+' + re.escape(tip['away']) + r'(?!\w)')
+                          pattern = (
+                              r'(?<!\w)' + re.escape(tip['home'])
+                              + r'\s+v\s+' + re.escape(tip['away'])
+                              + r'(?!\w)'
+                          )
                           if re.search(pattern, body, re.I):
                               belonging.append(tip)
+
                       if len(belonging) == 1:
-                          if len(parent.select('span.ui-odds[data-decimal]')) == 1:
+                          if len(parent.select(
+                              'span.ui-odds[data-decimal]'
+                          )) == 1:
                               tip = belonging[0]
                               lower = body.casefold()
-                              if tip['selection'].casefold() in lower and tip['market'].casefold() in lower:
+                              if (
+                                  tip['selection'].casefold() in lower
+                                  and tip['market'].casefold() in lower
+                              ):
                                   candidates[tip['id']].add(raw)
                           break
+
               for tip in tips:
                   values = candidates[tip['id']]
                   if len(values) == 1:
                       tip['odds'] = next(iter(values))
-                      print('Verified odds:', tip['author'], tip['home'], 'v', tip['away'], tip['odds'])
+                      print(
+                          'Verified odds:', tip['author'],
+                          tip['home'], 'v', tip['away'], tip['odds']
+                      )
                   else:
-                      print('Odds unavailable/unverified:', tip['author'], tip['home'], 'v', tip['away'])
+                      print(
+                          'Odds unavailable/unverified:',
+                          tip['author'], tip['home'], 'v', tip['away']
+                      )
 
           def translate(selection, market):
               s = selection.strip()
+
               if market in ('Full Time Result', 'Result'):
                   if s.casefold() in ('draw', 'x'):
                       return 'Нічия'
                   return 'Перемога: ' + s
+
               if market == 'Both Teams to Score':
                   if s.casefold().startswith('yes'):
                       return 'Так'
                   if s.casefold().startswith('no'):
                       return 'Ні'
-              s = re.sub(r'^Over\s+', 'Більше ', s, flags=re.I)
-              s = re.sub(r'^Under\s+', 'Менше ', s, flags=re.I)
-              return re.sub(r'(?<=\d)\.(?=\d)', ',', s.replace('(AH)', '(азійська фора)'))
+
+              s = re.sub(
+                  r'^Over\s+', 'Більше ', s, flags=re.I
+              )
+              s = re.sub(
+                  r'^Under\s+', 'Менше ', s, flags=re.I
+              )
+              return re.sub(
+                  r'(?<=\d)\.(?=\d)', ',',
+                  s.replace('(AH)', '(азійська фора)')
+              )
 
           def save_state(state):
               STATE.parent.mkdir(parents=True, exist_ok=True)
-              STATE.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding='utf-8')
-              subprocess.run(['git', 'add', str(STATE)], check=True)
-              changed = subprocess.run(['git', 'diff', '--cached', '--quiet'])
+              STATE.write_text(
+                  json.dumps(state, ensure_ascii=False, indent=2),
+                  encoding='utf-8'
+              )
+              subprocess.run(
+                  ['git', 'add', str(STATE)], check=True
+              )
+              changed = subprocess.run(
+                  ['git', 'diff', '--cached', '--quiet']
+              )
               if changed.returncode == 0:
                   return
+
               subprocess.run([
-                  'git', '-c', 'user.name=github-actions[bot]',
-                  '-c', 'user.email=41898282+github-actions[bot]@users.noreply.github.com',
+                  'git',
+                  '-c', 'user.name=github-actions[bot]',
+                  '-c',
+                  'user.email=41898282+github-actions[bot]@users.noreply.github.com',
                   'commit', '-m', 'Update football tips stats',
               ], check=True)
-              subprocess.run(['git', 'push', 'origin', 'HEAD:main'], check=True)
+
+              subprocess.run([
+                  'git', 'push', 'origin', 'HEAD:main'
+              ], check=True)
 
           if STATE.exists():
-              state = json.loads(STATE.read_text(encoding='utf-8'))
+              state = json.loads(
+                  STATE.read_text(encoding='utf-8')
+              )
           else:
               state = {'seen': [], 'matches': {}}
+
           seen = set(state.get('seen', []))
           matches = state.get('matches', {})
           snapshots = state.get('snapshots', {})
@@ -326,96 +529,180 @@ jobs:
                   return None
 
           def entries_for(author, start, end):
-              return [v for v in snapshots.values()
-                      if v.get('author') == author
-                      and (dt := observed_at(v)) is not None
-                      and start <= dt < end]
+              return [
+                  v for v in snapshots.values()
+                  if v.get('author') == author
+                  and (dt := observed_at(v)) is not None
+                  and start <= dt < end
+              ]
 
           def stats(author, start, end):
               entries = entries_for(author, start, end)
-              wins = [v for v in entries if v.get('result') == 'win']
-              losses = [v for v in entries if v.get('result') == 'loss']
-              pushes = [v for v in entries if v.get('result') == 'push']
-              pending = len(entries) - len(wins) - len(losses) - len(pushes)
-              odds_known = sum(v.get('odds_first_seen') is not None for v in entries)
+              wins = [
+                  v for v in entries if v.get('result') == 'win'
+              ]
+              losses = [
+                  v for v in entries if v.get('result') == 'loss'
+              ]
+              pushes = [
+                  v for v in entries if v.get('result') == 'push'
+              ]
+
+              pending = (
+                  len(entries) - len(wins)
+                  - len(losses) - len(pushes)
+              )
+              odds_known = sum(
+                  v.get('odds_first_seen') is not None
+                  for v in entries
+              )
               settled = wins + losses + pushes
-              if len(settled) == 0 or any(v.get('odds_first_seen') is None for v in settled):
+
+              if (
+                  not settled
+                  or any(
+                      v.get('odds_first_seen') is None
+                      for v in settled
+                  )
+              ):
                   roi = 'н/д'
                   profit = 'н/д'
               else:
-                  net = sum(float(v['odds_first_seen']) - 1 for v in wins) - len(losses)
-                  roi = f'{net / len(settled) * 100:+.1f}%'.replace('.', ',')
+                  net = sum(
+                      float(v['odds_first_seen']) - 1
+                      for v in wins
+                  ) - len(losses)
+                  roi = f'{net / len(settled) * 100:+.1f}%'
+                  roi = roi.replace('.', ',')
                   profit = f'{net:+.2f} од.'.replace('.', ',')
-              return (f'👤 {author}\n'
-                      f'⚽ Прогнозів: {len(entries)}\n'
-                      f'✅ Виграшів: {len(wins)}  ❌ Програшів: {len(losses)}\n'
-                      f'↩️ Повернень: {len(pushes)}  ⏳ Без результату: {pending}\n'
-                      f'💰 Коефіцієнт відомий: {odds_known}/{len(entries)}\n'
-                      f'📈 Прибуток: {profit}  |  ROI: {roi}')
+
+              return (
+                  f'👤 {author}\n'
+                  f'⚽ Прогнозів: {len(entries)}\n'
+                  f'✅ Виграшів: {len(wins)}  '
+                  f'❌ Програшів: {len(losses)}\n'
+                  f'↩️ Повернень: {len(pushes)}  '
+                  f'⏳ Без результату: {pending}\n'
+                  f'💰 Коефіцієнт відомий: '
+                  f'{odds_known}/{len(entries)}\n'
+                  f'📈 Прибуток: {profit}  |  ROI: {roi}'
+              )
 
           def month_bounds(year, month):
               start = datetime(year, month, 1, tzinfo=KYIV)
-              end = (start.replace(year=year + 1, month=1) if month == 12
-                     else start.replace(month=month + 1))
+              if month == 12:
+                  end = start.replace(year=year + 1, month=1)
+              else:
+                  end = start.replace(month=month + 1)
               return start, end
 
           def report(start, end, title):
-              return ('📊 FOOTBALL TIPS — ' + title + '\n'
-                      '━━━━━━━━━━━━━━━━━━\n\n'
-                      + stats('Geobetting', start, end) + '\n\n'
-                      + stats('tipstonga', start, end) + '\n\n'
-                      'ℹ️ Дані з моменту додавання статистики. '
-                      'ROI показуємо лише для підтверджених результатів із відомими коефіцієнтами. '
-                      'Автоматичне визначення підсумків матчів поки не налаштоване.')
+              return (
+                  '📊 FOOTBALL TIPS — ' + title + '\n'
+                  '━━━━━━━━━━━━━━━━━━\n\n'
+                  + stats('Geobetting', start, end)
+                  + '\n\n'
+                  + stats('tipstonga', start, end)
+                  + '\n\n'
+                  'ℹ️ Дані з моменту додавання статистики. '
+                  'ROI доступний для підтверджених результатів '
+                  'із відомими коефіцієнтами. '
+                  'Автоматичне визначення підсумків матчів '
+                  'поки не налаштоване.'
+              )
 
           def handle_commands():
-              # Read only updates for the configured chat. Polling happens at workflow frequency.
               offset = int(state.get('telegram_update_id', 0))
-              updates = api('getUpdates', {'offset': offset, 'limit': 100, 'timeout': 0})
+              updates = api('getUpdates', {
+                  'offset': offset,
+                  'limit': 100,
+                  'timeout': 0
+              })
+
               for update in updates:
-                  state['telegram_update_id'] = max(
-                      int(state.get('telegram_update_id', 0)), update['update_id'] + 1
-                  )
                   message = update.get('message') or {}
-                  if str((message.get('chat') or {}).get('id')) != chat_id:
+
+                  if str(
+                      (message.get('chat') or {}).get('id')
+                  ) != chat_id:
+                      state['telegram_update_id'] = update['update_id'] + 1
                       continue
-                  command = (message.get('text') or '').split(' ', 1)[0].split('@')[0].lower()
+
+                  command = (
+                      (message.get('text') or '')
+                      .split(' ', 1)[0]
+                      .split('@')[0].lower()
+                  )
+
                   current = datetime.now(KYIV)
-                  start, end = month_bounds(current.year, current.month)
+                  start, end = month_bounds(
+                      current.year, current.month
+                  )
+
                   if command in ('/start', '/help'):
-                      send('⚽ FOOTBALL TIPS ALERTS\n\n'
-                           '/stats — поточний місяць\n'
-                           '/compare — порівняння за 30 днів\n'
-                           '/history — останній завершений місяць\n'
-                           '/help — список команд\n\n'
-                           '📌 Команди обробляються під час наступної перевірки GitHub Actions.')
+                      send(
+                          '⚽ FOOTBALL TIPS ALERTS\n\n'
+                          '/stats — поточний місяць\n'
+                          '/compare — порівняння за 30 днів\n'
+                          '/history — попередній місяць\n'
+                          '/help — список команд\n\n'
+                          '📌 Команди обробляються під час '
+                          'наступної перевірки GitHub Actions.'
+                      )
+
                   elif command == '/stats':
-                      send(report(start, end, current.strftime('%m.%Y')))
+                      send(report(
+                          start, end, current.strftime('%m.%Y')
+                      ))
+
                   elif command == '/compare':
-                      send(report(current - timedelta(days=30), current, 'ОСТАННІ 30 ДНІВ'))
+                      send(report(
+                          current - timedelta(days=30),
+                          current, 'ОСТАННІ 30 ДНІВ'
+                      ))
+
                   elif command == '/history':
                       last_day = start - timedelta(days=1)
-                      prev_start, prev_end = month_bounds(last_day.year, last_day.month)
-                      send(report(prev_start, prev_end, last_day.strftime('%m.%Y')))
-              if updates:
-                  print('Telegram updates processed:', len(updates))
+                      prev_start, prev_end = month_bounds(
+                          last_day.year, last_day.month
+                      )
+                      send(report(
+                          prev_start, prev_end,
+                          last_day.strftime('%m.%Y')
+                      ))
 
-          # Commands are processed even if a source fails.
+                  state['telegram_update_id'] = update['update_id'] + 1
+
+              if updates:
+                  print(
+                      'Telegram updates processed:', len(updates)
+                  )
+
           try:
               handle_commands()
           except Exception as exc:
-              print('WARNING Telegram command polling:', str(exc))
+              print(
+                  'WARNING Telegram command polling:',
+                  type(exc).__name__
+              )
 
           if now.day == 1:
               last_day = now.replace(day=1) - timedelta(days=1)
               period = last_day.strftime('%Y-%m')
+
               if state.get('last_monthly_report') != period:
-                  old_start, old_end = month_bounds(last_day.year, last_day.month)
-                  send(report(old_start, old_end, 'ПІДСУМКИ ' + last_day.strftime('%m.%Y')))
+                  old_start, old_end = month_bounds(
+                      last_day.year, last_day.month
+                  )
+                  send(report(
+                      old_start, old_end,
+                      'ПІДСУМКИ ' + last_day.strftime('%m.%Y')
+                  ))
                   state['last_monthly_report'] = period
                   print('Monthly report sent:', period)
 
           all_tips, errors = [], []
+
           with sync_playwright() as playwright:
               browser = playwright.chromium.launch(headless=True)
               try:
@@ -423,7 +710,10 @@ jobs:
                       try:
                           print('Checking:', author)
                           text, html = page_data(browser, url)
-                          tips = parse_geobetting(text) if author == 'Geobetting' else parse_tipstonga(text)
+                          if author == 'Geobetting':
+                              tips = parse_geobetting(text)
+                          else:
+                              tips = parse_tipstonga(text)
                           add_verified_odds(html, tips)
                           all_tips.extend(tips)
                       except Exception as exc:
@@ -432,14 +722,19 @@ jobs:
               finally:
                   browser.close()
 
-          pending = [tip for tip in all_tips if tip['id'] not in seen]
+          pending = [
+              tip for tip in all_tips
+              if tip['id'] not in seen
+          ]
           print('New tips:', len(pending))
+
           current_matches = defaultdict(list)
           for tip in all_tips:
               current_matches[tip['match_key']].append(tip)
 
           for tip in pending:
               captured = datetime.now(KYIV)
+
               snapshots.setdefault(tip['id'], {
                   'author': tip['author'],
                   'fixture': tip['home'] + ' v ' + tip['away'],
@@ -447,13 +742,20 @@ jobs:
                   'market': tip['market'],
                   'date': tip['date'],
                   'odds_first_seen': tip['odds'],
-                  'first_seen_at': captured.isoformat(timespec='seconds'),
+                  'first_seen_at': captured.isoformat(
+                      timespec='seconds'
+                  ),
                   'source': tip['url'],
                   'result': 'pending',
               })
+
               snapshot = snapshots[tip['id']]
               fixed_odds = snapshot.get('odds_first_seen')
-              odds_display = (str(fixed_odds).replace('.', ',') if fixed_odds else 'недоступний')
+              odds_display = (
+                  str(fixed_odds).replace('.', ',')
+                  if fixed_odds else 'недоступний'
+              )
+
               message = (
                   '⚽ НОВИЙ ПРОГНОЗ\n'
                   '━━━━━━━━━━━━━━━━━━\n'
@@ -461,46 +763,91 @@ jobs:
                   f'🏟 Матч: {tip["home"]} — {tip["away"]}\n'
                   f'📅 Дата: {tip["date"]}\n'
                   f'📊 Ринок: {MARKETS[tip["market"]]}\n'
-                  f'🎯 Ставка: {translate(tip["selection"], tip["market"])}\n'
+                  f'🎯 Ставка: '
+                  f'{translate(tip["selection"], tip["market"])}\n'
                   f'💰 OLBG: {odds_display}\n'
-                  '🕘 Виявлено: ' + captured.strftime('%d.%m.%Y, %H:%M') + ' (Київ)\n'
+                  '🕘 Виявлено: '
+                  + captured.strftime('%d.%m.%Y, %H:%M')
+                  + ' (Київ)\n'
               )
+
               if tip['time']:
-                  message += f'🕒 Час матчу за OLBG: {tip["time"]}\n'
+                  message += (
+                      f'🕒 Час матчу за OLBG: {tip["time"]}\n'
+                  )
+
               other = []
               for old in matches.get(tip['match_key'], []):
-                  if old.get('author', old.get('tipster')) != tip['author']:
+                  if old.get(
+                      'author', old.get('tipster')
+                  ) != tip['author']:
                       other.append(old)
+
               for current_tip in current_matches[tip['match_key']]:
-                  if current_tip['author'] != tip['author'] and not any(
-                      v.get('author', v.get('tipster')) == current_tip['author']
-                      and v.get('market') == current_tip['market']
-                      and v.get('selection') == current_tip['selection'] for v in other
+                  if (
+                      current_tip['author'] != tip['author']
+                      and not any(
+                          v.get('author', v.get('tipster'))
+                          == current_tip['author']
+                          and v.get('market') == current_tip['market']
+                          and v.get('selection') == current_tip['selection']
+                          for v in other
+                      )
                   ):
                       other.append(current_tip)
+
               if other:
                   message += '\n⚠️ ОБИДВА КАППЕРИ НА ЦЕЙ МАТЧ\n'
                   for old in other:
-                      message += (f'• {old.get("author", old.get("tipster"))}: '
-                                  f'{translate(old["selection"], old["market"])}\n')
-              message += '\n📌 Порівняй коефіцієнт із BetKing\n🔗 ' + tip['url']
+                      message += (
+                          f'• {old.get("author", old.get("tipster"))}: '
+                          f'{translate(old["selection"], old["market"])}\n'
+                      )
+
+              message += (
+                  '\n📌 Порівняй коефіцієнт із BetKing\n🔗 '
+                  + tip['url']
+              )
+
               send(message)
               seen.add(tip['id'])
+
               previous = matches.setdefault(tip['match_key'], [])
-              if not any(v.get('author', v.get('tipster')) == tip['author']
-                         and v.get('market') == tip['market']
-                         and v.get('selection') == tip['selection'] for v in previous):
+              if not any(
+                  v.get('author', v.get('tipster')) == tip['author']
+                  and v.get('market') == tip['market']
+                  and v.get('selection') == tip['selection']
+                  for v in previous
+              ):
                   previous.append({
-                      'author': tip['author'], 'market': tip['market'],
+                      'author': tip['author'],
+                      'market': tip['market'],
                       'selection': tip['selection'],
                   })
-              state.update({'seen': sorted(seen), 'matches': matches, 'snapshots': snapshots})
-              save_state(state)
-              print('Sent and saved:', tip['author'], tip['home'], 'v', tip['away'], fixed_odds)
 
-          state.update({'seen': sorted(seen), 'matches': matches, 'snapshots': snapshots})
+              state.update({
+                  'seen': sorted(seen),
+                  'matches': matches,
+                  'snapshots': snapshots,
+              })
+              save_state(state)
+              print(
+                  'Sent and saved:',
+                  tip['author'], tip['home'],
+                  'v', tip['away'], fixed_odds
+              )
+
+          state.update({
+              'seen': sorted(seen),
+              'matches': matches,
+              'snapshots': snapshots,
+          })
           save_state(state)
+
           if errors:
-              raise RuntimeError('Failed sources: ' + ', '.join(errors))
+              raise RuntimeError(
+                  'Failed sources: ' + ', '.join(errors)
+              )
+
           print('Monitoring complete')
           PY
