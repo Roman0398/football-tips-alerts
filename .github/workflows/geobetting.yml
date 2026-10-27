@@ -21,21 +21,31 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: main
+          persist-credentials: true
+
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+
       - name: Install dependencies
         run: |
           pip install playwright beautifulsoup4
-          python -m playwright install --with-deps chromium
+          python -m playwright install chromium
+
       - name: Monitor OLBG and Telegram
         env:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           CHAT_ID: ${{ secrets.CHAT_ID }}
         run: |
           python3 -u - <<'PY'
-          import hashlib, json, os, re, subprocess, time, unicodedata
-          import urllib.request, urllib.parse, urllib.error
+          import hashlib
+          import json
+          import os
+          import re
+          import subprocess
+          import unicodedata
+          import urllib.parse
+          import urllib.request
           from datetime import datetime, timedelta
           from pathlib import Path
           from zoneinfo import ZoneInfo
@@ -46,392 +56,1612 @@ jobs:
               'Geobetting': 'https://www.olbg.com/tipsters/tips/420769',
               'tipstonga': 'https://www.olbg.com/best-tipsters/Football/1/13000',
           }
+
           MARKETS = {
-              'Full Time Result':'Результат матчу', 'Result':'Результат матчу',
-              'Total Goals':'Тотал голів', 'Both Teams to Score':'Обидві заб’ють',
-              'Asian Hcap':'Азійська фора', 'Result and BTTS':'Результат + ОЗ',
-              'Total Corners':'Кутові', 'Total Cards':'Картки',
-              'Correct Score':'Точний рахунок', 'Half Time Result':'Перший тайм',
-              'Half Time/Full Time':'Тайм / матч', 'Anytime Goalscorer':'Автор гола',
-              'First Goalscorer':'Перший гол',
+              'Full Time Result': 'Результат матчу',
+              'Result': 'Результат матчу',
+              'Total Goals': 'Тотал голів',
+              'Both Teams to Score': 'Обидві заб’ють',
+              'Asian Hcap': 'Азійська фора',
+              'Result and BTTS': 'Результат + ОЗ',
+              'Total Corners': 'Кутові',
+              'Total Cards': 'Картки',
+              'Correct Score': 'Точний рахунок',
+              'Half Time Result': 'Перший тайм',
+              'Half Time/Full Time': 'Тайм / матч',
+              'Anytime Goalscorer': 'Автор гола',
+              'First Goalscorer': 'Перший гол',
           }
+
+          KYIV = ZoneInfo('Europe/Kyiv')
+          LONDON = ZoneInfo('Europe/London')
           STATE = Path('.state/football-tips.json')
-          KYIV, LONDON = ZoneInfo('Europe/Kyiv'), ZoneInfo('Europe/London')
-          FIXTURE = re.compile(r'^(?:(\d{1,2}:\d{2})\s+)?(.+?)\s+v\s+(.+)$', re.I)
-          DATE = re.compile(r'^\d{1,2} [A-Za-z]+ 20\d{2}$')
-          token = os.getenv('BOT_TOKEN', '').strip()
-          chat_id = os.getenv('CHAT_ID', '').strip()
-          if not token or not chat_id:
-              raise RuntimeError('BOT_TOKEN / CHAT_ID are missing')
-          state = json.loads(STATE.read_text(encoding='utf8')) if STATE.exists() else {}
+
+          FIXTURE = re.compile(
+              r'^(?:(\d{1,2}:\d{2})\s+)?(.+?)\s+v\s+(.+)$',
+              re.I
+          )
+          DATE = re.compile(
+              r'^\d{1,2} [A-Za-z]+ 20\d{2}$'
+          )
+          CLOCK = re.compile(r'^\d{1,2}:\d{2}$')
+
+          TOKEN = os.environ.get('BOT_TOKEN', '').strip()
+          CHAT = os.environ.get('CHAT_ID', '').strip()
+
+          if not TOKEN or not CHAT:
+              raise RuntimeError('BOT_TOKEN / CHAT_ID missing')
+
+          if STATE.exists():
+              state = json.loads(
+                  STATE.read_text(encoding='utf-8')
+              )
+          else:
+              state = {}
+
           seen = set(state.get('seen', []))
-          snaps = state.setdefault('snapshots', {})
+          snapshots = state.setdefault('snapshots', {})
           matches = state.setdefault('matches', {})
-          now = lambda: datetime.now(KYIV)
+
+          def now():
+              return datetime.now(KYIV)
 
           def api(method, params=None):
-              url = 'https://api.telegram.org/bot' + token + '/' + method
-              body = urllib.parse.urlencode(params or {}).encode()
-              try:
-                  with urllib.request.urlopen(url, data=body, timeout=30) as res:
-                      result = json.load(res)
-              except urllib.error.HTTPError as ex:
-                  raise RuntimeError('Telegram ' + method + ' HTTP ' + str(ex.code)) from None
+              url = (
+                  'https://api.telegram.org/bot'
+                  + TOKEN + '/' + method
+              )
+              data = urllib.parse.urlencode(
+                  params or {}
+              ).encode('utf-8')
+
+              with urllib.request.urlopen(
+                  url,
+                  data=data,
+                  timeout=25
+              ) as response:
+                  result = json.load(response)
+
               if not result.get('ok'):
-                  raise RuntimeError('Telegram ' + method + ' rejected')
+                  raise RuntimeError(
+                      'Telegram ' + method + ' failed'
+                  )
               return result['result']
 
           MENU = [
-              [('📊 Цей місяць','stats'), ('🏆 Разом','total')],
-              [('📈 30 днів','compare'), ('📚 Архів','archive')],
-              [('📅 3 місяці','last3'), ('📅 6 місяців','last6')],
-              [('📅 12 місяців','last12'), ('♾ Увесь час','alltime')],
-              [('⏳ Підтвердити ставки','pending:0'), ('❔ Допомога','help')],
+              [
+                  ('📊 Цей місяць', 'stats'),
+                  ('🏆 Разом', 'total')
+              ],
+              [
+                  ('📈 30 днів', 'compare'),
+                  ('📚 Архів', 'archive')
+              ],
+              [
+                  ('📅 3 місяці', 'last3'),
+                  ('📅 6 місяців', 'last6')
+              ],
+              [
+                  ('📅 12 місяців', 'last12'),
+                  ('♾ Весь час', 'alltime')
+              ],
+              [
+                  ('⏳ Результати', 'pending:0'),
+                  ('❔ Допомога', 'help')
+              ],
           ]
-          BACK = [[('⬅️ Головне меню','menu')]]
+
+          BACK = [
+              [('⬅️ Головне меню', 'menu')]
+          ]
+
           def send(text, rows=None, edit=None):
-              params = {'chat_id':chat_id,'text':text[:4096], 'disable_web_page_preview':'true'}
+              params = {
+                  'chat_id': CHAT,
+                  'text': text[:4096],
+                  'disable_web_page_preview': 'true',
+              }
+
               if rows is not None:
-                  params['reply_markup'] = json.dumps({'inline_keyboard':[
-                      [{'text':label,'callback_data':value} for label,value in row]
-                      for row in rows
-                  ]}, ensure_ascii=False)
+                  params['reply_markup'] = json.dumps(
+                      {
+                          'inline_keyboard': [
+                              [
+                                  {
+                                      'text': label,
+                                      'callback_data': key
+                                  }
+                                  for label, key in row
+                              ]
+                              for row in rows
+                          ]
+                      },
+                      ensure_ascii=False
+                  )
+
               if edit is not None:
                   params['message_id'] = edit
                   return api('editMessageText', params)
+
               return api('sendMessage', params)
 
           def save():
               state['seen'] = sorted(seen)
-              STATE.parent.mkdir(parents=True, exist_ok=True)
-              STATE.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding='utf8')
-              subprocess.run(['git','add',str(STATE)], check=True)
-              diff = subprocess.run(['git','diff','--cached','--quiet']).returncode
-              if diff == 0: return
-              if diff != 1: raise RuntimeError('git diff failed')
-              subprocess.run(['git','-c','user.name=github-actions[bot]',
-                              '-c','user.email=41898282+github-actions[bot]@users.noreply.github.com',
-                              'commit','-m','Update football tips archive'], check=True)
-              subprocess.run(['git','push','origin','HEAD:main'], check=True)
 
-          def norm(s):
-              s = ''.join(c for c in unicodedata.normalize('NFKD',s.casefold())
-                          if not unicodedata.combining(c))
-              s = re.sub(r'[^a-z0-9]+',' ',s).strip()
-              aliases = {'roma':'as roma','man utd':'manchester united',
-                         'man city':'manchester city','spurs':'tottenham hotspur',
-                         'psg':'paris saint germain','barca':'barcelona'}
-              return aliases.get(s,s)
-          def tip(author,day,clock,home,away,market,choice):
-              fixture = day+'|'+'|'.join(sorted([norm(home),norm(away)]))
-              uid = hashlib.sha256('|'.join([author,fixture,market,choice.casefold().strip()]).encode()).hexdigest()
-              return dict(id=uid,author=author,date=day,time=clock,home=home,away=away,
-                          market=market,selection=choice,match_key=fixture,url=SOURCES[author],odds=None)
+              STATE.parent.mkdir(
+                  parents=True,
+                  exist_ok=True
+              )
 
-          def page_data(browser,author,url):
-              for attempt in range(1,4):
-                  page = browser.new_page(viewport={'width':1280,'height':900})
-                  try:
-                      res = page.goto(url, wait_until='domcontentloaded', timeout=45000)
-                      if res and res.status >= 400: raise RuntimeError('HTTP '+str(res.status))
-                      try: page.get_by_text('Accept all',exact=True).last.click(timeout=1800)
-                      except Exception: pass
-                      page.wait_for_timeout(3500 if attempt == 1 else 6500)
-                      body = page.locator('body').inner_text(timeout=12000)
-                      low = body.casefold()
-                      valid = ("geobetting's tips" in low if author == 'Geobetting'
-                               else ('tipstonga' in low and ('today tips' in low or 'no current tips' in low)))
-                      print('Page:',author,'attempt:',attempt,'chars:',len(body),'valid:',valid)
-                      if valid: return body,page.content()
-                  except Exception as ex:
-                      print('Page retry:',author,type(ex).__name__)
-                  finally: page.close()
-              return None,None
+              STATE.write_text(
+                  json.dumps(
+                      state,
+                      ensure_ascii=False,
+                      indent=2
+                  ),
+                  encoding='utf-8'
+              )
+
+              subprocess.run(
+                  ['git', 'add', str(STATE)],
+                  check=True
+              )
+
+              status = subprocess.run(
+                  ['git', 'diff', '--cached', '--quiet']
+              ).returncode
+
+              if status == 0:
+                  return
+              if status != 1:
+                  raise RuntimeError('git diff failed')
+
+              subprocess.run([
+                  'git',
+                  '-c',
+                  'user.name=github-actions[bot]',
+                  '-c',
+                  'user.email=41898282+github-actions[bot]@users.noreply.github.com',
+                  'commit',
+                  '-m',
+                  'Save football tips state'
+              ], check=True)
+
+              subprocess.run(
+                  ['git', 'push', 'origin', 'HEAD:main'],
+                  check=True
+              )
+
+          def norm(value):
+              value = ''.join(
+                  c for c in unicodedata.normalize(
+                      'NFKD', value.casefold()
+                  )
+                  if not unicodedata.combining(c)
+              )
+
+              value = re.sub(
+                  r'[^a-z0-9]+', ' ', value
+              ).strip()
+
+              aliases = {
+                  'roma': 'as roma',
+                  'man utd': 'manchester united',
+                  'man city': 'manchester city',
+                  'spurs': 'tottenham hotspur',
+                  'psg': 'paris saint germain',
+                  'barca': 'barcelona',
+              }
+
+              return aliases.get(value, value)
+
+          def make_tip(
+              author, day, clock,
+              home, away, market, choice
+          ):
+              match = (
+                  day + '|'
+                  + '|'.join(sorted((
+                      norm(home),
+                      norm(away)
+                  )))
+              )
+
+              raw = '|'.join((
+                  author,
+                  match,
+                  market,
+                  choice.casefold().strip()
+              ))
+
+              return dict(
+                  id=hashlib.sha256(
+                      raw.encode()
+                  ).hexdigest(),
+                  author=author,
+                  date=day,
+                  time=clock,
+                  home=home,
+                  away=away,
+                  market=market,
+                  selection=choice,
+                  match_key=match,
+                  url=SOURCES[author],
+                  odds=None
+              )
 
           def parse_geobetting(body):
-              if 'geobetting has no current tips' in body.casefold(): return []
-              lines = [s.strip() for s in body.splitlines() if s.strip()]
-              start = next(i for i,s in enumerate(lines) if "geobetting's tips" in s.casefold())
-              lines = lines[start+1:]
-              stop = next((i for i,s in enumerate(lines) if 'Tips are normally settled' in s),len(lines))
+              low = body.casefold()
+
+              if "geobetting's tips" not in low:
+                  raise ValueError(
+                      'profile heading absent'
+                  )
+
+              if 'geobetting has no current tips' in low:
+                  return []
+
+              lines = [
+                  x.strip()
+                  for x in body.splitlines()
+                  if x.strip()
+              ]
+
+              start = next(
+                  i for i, v in enumerate(lines)
+                  if "geobetting's tips" in v.casefold()
+              )
+              lines = lines[start + 1:]
+
+              stop = next(
+                  (
+                      i for i, v in enumerate(lines)
+                      if 'Tips are normally settled' in v
+                  ),
+                  len(lines)
+              )
               lines = lines[:stop]
-              day=home=away=clock=None
-              found=[]
-              for i,s in enumerate(lines):
-                  if DATE.fullmatch(s):
-                      day=datetime.strptime(s,'%d %B %Y').date().isoformat()
-                      home=away=clock=None
-                  elif day and FIXTURE.fullmatch(s):
-                      clock,home,away=FIXTURE.fullmatch(s).groups()
-                  elif s in MARKETS and day and home and i:
-                      choice=lines[i-1]
-                      if choice not in MARKETS and len(choice)<120 and not FIXTURE.fullmatch(choice):
-                          found.append(tip('Geobetting',day,clock,home,away,s,choice))
-              if not found and any(DATE.fullmatch(s) for s in lines):
-                  raise RuntimeError('Geobetting tips not parsed')
-              return list({t['id']:t for t in found}.values())
+
+              day = home = away = clock = None
+              found = []
+
+              for i, item in enumerate(lines):
+                  if DATE.fullmatch(item):
+                      day = datetime.strptime(
+                          item, '%d %B %Y'
+                      ).date().isoformat()
+                      home = away = clock = None
+
+                  elif day and FIXTURE.fullmatch(item):
+                      clock, home, away = (
+                          FIXTURE.fullmatch(item).groups()
+                      )
+
+                  elif item in MARKETS and day and home and i:
+                      choice = lines[i - 1]
+
+                      if (
+                          choice not in MARKETS
+                          and choice not in (
+                              '@', 'WIN', '50 WIN'
+                          )
+                          and not FIXTURE.fullmatch(choice)
+                          and len(choice) < 120
+                      ):
+                          found.append(make_tip(
+                              'Geobetting',
+                              day, clock,
+                              home, away,
+                              item, choice
+                          ))
+
+              if not found and any(
+                  DATE.fullmatch(x) for x in lines
+              ):
+                  raise ValueError(
+                      'active tips could not be parsed'
+                  )
+
+              return list({
+                  t['id']: t for t in found
+              }.values())
 
           def parse_tipstonga(body):
-              lines=[s.strip() for s in body.splitlines() if s.strip()]
-              marker=next((i for i,s in enumerate(lines) if s.casefold()=='today tips'),None)
+              lines = [
+                  x.strip()
+                  for x in body.splitlines()
+                  if x.strip()
+              ]
+
+              if not any(
+                  x.casefold() == 'tipstonga'
+                  for x in lines
+              ):
+                  raise ValueError(
+                      'tipstonga profile not verified'
+                  )
+
+              marker = next(
+                  (
+                      i for i, x in enumerate(lines)
+                      if x.casefold() == 'today tips'
+                  ),
+                  None
+              )
+
               if marker is None:
-                  if 'no current tips' in body.casefold(): return []
-                  raise RuntimeError('Today Tips section missing')
-              lines=lines[marker+1:]
-              stop=next((i for i,s in enumerate(lines) if s.startswith('Profits calculated to a')),len(lines))
-              lines=lines[:stop]
-              today=datetime.now(LONDON).date()
-              found=[]; fixtures=0
-              for i,s in enumerate(lines):
-                  match=FIXTURE.fullmatch(s)
-                  if not match or not i: continue
-                  fixtures+=1
-                  clock,home,away=match.groups()
-                  choice=lines[i-1]
-                  following=lines[i+1:i+9]
-                  market=next((s for s in following if s in MARKETS),None)
-                  if not market or choice in MARKETS: continue
-                  day=None
-                  for j,v in enumerate(following):
-                      if v in ('Today','Tomorrow'):
-                          day=(today+timedelta(days=int(v=='Tomorrow'))).isoformat()
-                          if j+1<len(following) and re.fullmatch(r'\d{1,2}:\d{2}',following[j+1]):
-                              clock=following[j+1]
+                  raise ValueError(
+                      'Today Tips missing; availability unknown'
+                  )
+
+              lines = lines[marker + 1:]
+
+              stop = next(
+                  (
+                      i for i, x in enumerate(lines)
+                      if x.startswith(
+                          'Profits calculated to a'
+                      )
+                  ),
+                  len(lines)
+              )
+              lines = lines[:stop]
+
+              today = datetime.now(LONDON).date()
+              found = []
+              fixture_count = 0
+
+              for i, line in enumerate(lines):
+                  fixture = FIXTURE.fullmatch(line)
+
+                  if not fixture or not i:
+                      continue
+
+                  fixture_count += 1
+                  clock, home, away = fixture.groups()
+                  choice = lines[i - 1]
+                  following = lines[i + 1:i + 9]
+
+                  market = next(
+                      (
+                          x for x in following
+                          if x in MARKETS
+                      ),
+                      None
+                  )
+
+                  if (
+                      not market
+                      or choice in MARKETS
+                      or choice in (
+                          'SELECTION',
+                          'ODDS',
+                          'WIN',
+                          'VALUE RATING'
+                      )
+                  ):
+                      continue
+
+                  day = None
+
+                  for j, value in enumerate(following):
+                      if value in ('Today', 'Tomorrow'):
+                          day = (
+                              today + timedelta(
+                                  days=int(
+                                      value == 'Tomorrow'
+                                  )
+                              )
+                          ).isoformat()
+
+                          if (
+                              j + 1 < len(following)
+                              and CLOCK.fullmatch(
+                                  following[j + 1]
+                              )
+                          ):
+                              clock = following[j + 1]
                           break
-                      if DATE.fullmatch(v):
-                          day=datetime.strptime(v,'%d %B %Y').date().isoformat();break
-                  if not day: continue
-                  found.append(tip('tipstonga',day,clock,home,away,market,choice))
-              result=list({t['id']:t for t in found}.values())
-              if fixtures and len(result)!=fixtures: raise RuntimeError('tipstonga tips partially parsed')
+
+                      if DATE.fullmatch(value):
+                          day = datetime.strptime(
+                              value, '%d %B %Y'
+                          ).date().isoformat()
+                          break
+
+                  if day and clock:
+                      found.append(make_tip(
+                          'tipstonga',
+                          day, clock,
+                          home, away,
+                          market, choice
+                      ))
+
+              result = list({
+                  t['id']: t for t in found
+              }.values())
+
+              if (
+                  fixture_count
+                  and fixture_count != len(result)
+              ):
+                  raise ValueError(
+                      'some tipstonga fixtures not parsed'
+                  )
+
               return result
 
-          def odds_from_html(html,tips):
-              soup=BeautifulSoup(html,'html.parser')
+          def verified_odds(html, tips):
+              soup = BeautifulSoup(
+                  html, 'html.parser'
+              )
+
               for t in tips:
-                  candidates=set()
-                  for node in soup.select('span.ui-odds[data-decimal]'):
-                      raw=node.get('data-decimal','')
-                      if not re.fullmatch(r'\d+(?:\.\d+)?',raw): continue
+                  values = set()
+                  pattern = re.compile(
+                      r'(?<!\w)'
+                      + re.escape(t['home'])
+                      + r'\s+v\s+'
+                      + re.escape(t['away'])
+                      + r'(?!\w)',
+                      re.I
+                  )
+
+                  for node in soup.select(
+                      'span.ui-odds[data-decimal]'
+                  ):
+                      odd = node.get(
+                          'data-decimal', ''
+                      )
+
+                      if not re.fullmatch(
+                          r'\d+(?:\.\d+)?', odd
+                      ):
+                          continue
+
+                      if not 1.01 <= float(odd) <= 1000:
+                          continue
+
                       for parent in node.parents:
-                          if parent.name in ('body','html','[document]'):break
-                          text=' '.join(parent.stripped_strings)
-                          if len(text)>3500:break
-                          if (t['home']+' v '+t['away']).casefold() in text.casefold():
-                              if (t['selection'].casefold() in text.casefold()
-                                  and t['market'].casefold() in text.casefold()
-                                  and len(parent.select('span.ui-odds[data-decimal]'))==1):
-                                  candidates.add(raw)
+                          if parent.name in (
+                              'body', 'html', '[document]'
+                          ):
                               break
-                  if len(candidates)==1:t['odds']=next(iter(candidates))
-                  print('Tip:',t['author'],t['home'],'v',t['away'],'odds:',t['odds'])
 
-          def first_seen(v):
-              raw=v.get('first_seen_at')
-              if not raw:return None
+                          content = ' '.join(
+                              parent.stripped_strings
+                          )
+
+                          if len(content) > 3500:
+                              break
+
+                          if pattern.search(content):
+                              if (
+                                  t['selection'].casefold()
+                                  in content.casefold()
+                                  and t['market'].casefold()
+                                  in content.casefold()
+                                  and len(parent.select(
+                                      'span.ui-odds[data-decimal]'
+                                  )) == 1
+                              ):
+                                  values.add(odd)
+                              break
+
+                  if len(values) == 1:
+                      t['odds'] = next(iter(values))
+
+                  print(
+                      'ODDS',
+                      t['author'],
+                      t['home'],
+                      'v',
+                      t['away'],
+                      t['odds']
+                  )
+
+          def read_with_browser(browser, author, url):
+              for attempt in range(1, 4):
+                  page = browser.new_page(
+                      viewport={
+                          'width': 1280,
+                          'height': 900
+                      }
+                  )
+
+                  try:
+                      response = page.goto(
+                          url,
+                          wait_until='domcontentloaded',
+                          timeout=40000
+                      )
+
+                      if (
+                          response
+                          and response.status >= 400
+                      ):
+                          raise RuntimeError(
+                              'HTTP ' + str(response.status)
+                          )
+
+                      try:
+                          page.get_by_text(
+                              'Accept all',
+                              exact=True
+                          ).last.click(timeout=1500)
+                      except Exception:
+                          pass
+
+                      page.wait_for_timeout(
+                          4000 if attempt == 1 else 7000
+                      )
+
+                      if author == 'tipstonga':
+                          try:
+                              page.get_by_text(
+                                  'Today Tips',
+                                  exact=True
+                              ).first.wait_for(timeout=5000)
+                          except Exception:
+                              pass
+
+                      body = page.locator(
+                          'body'
+                      ).inner_text(timeout=10000)
+
+                      html = page.content()
+
+                      print(
+                          'BROWSER',
+                          author,
+                          'attempt', attempt,
+                          'chars', len(body),
+                          'today_tips',
+                          'today tips' in body.casefold()
+                      )
+
+                      if (
+                          author == 'Geobetting'
+                          and "geobetting's tips"
+                          in body.casefold()
+                      ):
+                          return body, html
+
+                      if (
+                          author == 'tipstonga'
+                          and 'today tips'
+                          in body.casefold()
+                      ):
+                          return body, html
+
+                      if attempt == 3:
+                          soup = BeautifulSoup(
+                              html,
+                              'html.parser'
+                          )
+                          headings = [
+                              x.get_text(
+                                  ' ', strip=True
+                              )[:65]
+                              for x in soup.select(
+                                  'h1,h2,h3'
+                              )
+                          ][:12]
+
+                          print(
+                              'DIAGNOSTIC',
+                              author,
+                              'headings:',
+                              headings
+                          )
+
+                  except Exception as exc:
+                      print(
+                          'BROWSER RETRY',
+                          author,
+                          attempt,
+                          type(exc).__name__,
+                          str(exc)[:150]
+                      )
+
+                  finally:
+                      page.close()
+
+              return None, None
+
+          def read_with_http(author, url):
+              for attempt in range(1, 3):
+                  try:
+                      request = urllib.request.Request(
+                          url,
+                          headers={
+                              'User-Agent': (
+                                  'Mozilla/5.0 '
+                                  '(X11; Linux x86_64) '
+                                  'AppleWebKit/537.36 '
+                                  'Chrome/125.0 Safari/537.36'
+                              ),
+                              'Accept-Language': (
+                                  'en-GB,en;q=0.9'
+                              ),
+                              'Accept': (
+                                  'text/html,'
+                                  'application/xhtml+xml'
+                              ),
+                          }
+                      )
+
+                      with urllib.request.urlopen(
+                          request,
+                          timeout=20
+                      ) as response:
+                          raw = response.read(
+                              2000000
+                          ).decode(
+                              'utf-8',
+                              errors='replace'
+                          )
+
+                      soup = BeautifulSoup(
+                          raw,
+                          'html.parser'
+                      )
+
+                      for tag in soup([
+                          'script', 'style', 'noscript'
+                      ]):
+                          tag.decompose()
+
+                      body = soup.get_text(
+                          '\n', strip=True
+                      )
+
+                      print(
+                          'HTTP',
+                          author,
+                          'attempt', attempt,
+                          'chars', len(body),
+                          'today_tips',
+                          'today tips' in body.casefold()
+                      )
+
+                      if (
+                          author == 'Geobetting'
+                          and "geobetting's tips"
+                          in body.casefold()
+                      ):
+                          return body, raw
+
+                      if (
+                          author == 'tipstonga'
+                          and 'today tips'
+                          in body.casefold()
+                      ):
+                          return body, raw
+
+                  except Exception as exc:
+                      print(
+                          'HTTP RETRY',
+                          author,
+                          attempt,
+                          type(exc).__name__,
+                          str(exc)[:150]
+                      )
+
+              return None, None
+
+          def first_seen(item):
               try:
-                  d=datetime.fromisoformat(raw)
-                  return d.replace(tzinfo=KYIV) if d.tzinfo is None else d.astimezone(KYIV)
-              except (TypeError,ValueError):return None
-          def entries(start=None,end=None,author=None):
-              out=[]
-              for key,v in snaps.items():
-                  d=first_seen(v)
-                  if d is None or (start and d<start) or (end and d>=end):continue
-                  if author and v.get('author')!=author:continue
-                  out.append((key,v))
-              return out
-          def month_start(dt):return datetime(dt.year,dt.month,1,tzinfo=KYIV)
-          def shift(dt,n):
-              index=dt.year*12+dt.month-1+n
-              return datetime(index//12,index%12+1,1,tzinfo=KYIV)
-          def fmt(num,digits=2):return f'{num:+.{digits}f}'.replace('.',',')
-          def stats(rows,label):
-              items=[v for _,v in rows]
-              wins=[v for v in items if v.get('result')=='win']
-              losses=[v for v in items if v.get('result')=='loss']
-              pushes=[v for v in items if v.get('result')=='push']
-              settled=wins+losses+pushes
-              pending=len(items)-len(settled)
-              decided=len(wins)+len(losses)
-              hit=f'{100*len(wins)/decided:.1f}%'.replace('.',',') if decided else 'н/д'
-              all_odds=all(v.get('odds_first_seen') is not None for v in settled)
-              if settled and all_odds:
-                  profit=sum(float(v['odds_first_seen'])-1 for v in wins)-len(losses)
-                  performance=fmt(profit)+' од. | ROI '+fmt(profit/len(settled)*100,1)+'%'
-              else:performance='н/д | ROI н/д'
-              known=sum(v.get('odds_first_seen') is not None for v in items)
-              return (f'👤 {label}\n⚽ Прогнозів: {len(items)}\n'
-                      f'✅ {len(wins)}  ❌ {len(losses)}  ↩️ {len(pushes)}  ⏳ {pending}\n'
-                      f'🎯 Прохідність: {hit}\n💰 Прибуток: {performance}\n'
-                      f'🔎 Коефіцієнти: {known}/{len(items)}')
-          def report(start,end,label,combined=False):
-              rows=entries(start,end)
-              title='📊 FOOTBALL TIPS — '+label+'\n━━━━━━━━━━━━━\n\n'
-              if combined:return title+stats(rows,'Обидва разом')
-              return (title+stats(entries(start,end,'Geobetting'),'Geobetting')+'\n\n'
-                      +stats(entries(start,end,'tipstonga'),'tipstonga')+'\n\n'
-                      +stats(rows,'🏆 ОБИДВА РАЗОМ')
-                      +'\n\nℹ️ ROI: однакова ставка 1 од. на кожен завершений прогноз з відомим кф.')
+                  dt = datetime.fromisoformat(
+                      item['first_seen_at']
+                  )
 
-          def pending_view(page):
-              rows=sorted([(k,v) for k,v in entries() if v.get('result') not in ('win','loss','push')],
-                          key=lambda kv:first_seen(kv[1]),reverse=True)
-              count=len(rows); limit=4; maxpage=max(0,(count-1)//limit)
-              page=max(0,min(page,maxpage)); section=rows[page*limit:(page+1)*limit]
-              text=f'⏳ ПРОГНОЗИ БЕЗ РЕЗУЛЬТАТУ: {count}\nСторінка {page+1}/{maxpage+1}\n'
-              buttons=[]
-              for k,v in section:
-                  text+='\n⚽ '+str(v.get('fixture'))+'\n👤 '+str(v.get('author'))+'\n🎯 '+str(v.get('selection'))+'\n'
-                  buttons.append([('✅ Виграш','r:w:'+k[:16]),('❌ Програш','r:l:'+k[:16]),('↩️ Повернення','r:p:'+k[:16])])
-              nav=[]
-              if page:nav.append(('⬅️',f'pending:{page-1}'))
-              if page<maxpage:nav.append(('Далі ➡️',f'pending:{page+1}'))
-              if nav:buttons.append(nav)
-              return text,buttons+BACK
+                  if dt.tzinfo is None:
+                      return dt.replace(tzinfo=KYIV)
+
+                  return dt.astimezone(KYIV)
+
+              except (KeyError, ValueError, TypeError):
+                  return None
+
+          def entries(
+              start=None,
+              end=None,
+              author=None
+          ):
+              result = []
+
+              for key, item in snapshots.items():
+                  dt = first_seen(item)
+
+                  if (
+                      dt is None
+                      or (start and dt < start)
+                      or (end and dt >= end)
+                  ):
+                      continue
+
+                  if (
+                      author
+                      and item.get('author') != author
+                  ):
+                      continue
+
+                  result.append((key, item))
+
+              return result
+
+          def month_start(dt):
+              return datetime(
+                  dt.year,
+                  dt.month,
+                  1,
+                  tzinfo=KYIV
+              )
+
+          def shift(dt, n):
+              index = (
+                  dt.year * 12
+                  + dt.month - 1 + n
+              )
+
+              return datetime(
+                  index // 12,
+                  index % 12 + 1,
+                  1,
+                  tzinfo=KYIV
+              )
+
+          def fmt(n, decimal=2):
+              return f'{n:+.{decimal}f}'.replace(
+                  '.', ','
+              )
+
+          def summary(rows, label):
+              items = [v for _, v in rows]
+
+              wins = [
+                  v for v in items
+                  if v.get('result') == 'win'
+              ]
+              losses = [
+                  v for v in items
+                  if v.get('result') == 'loss'
+              ]
+              pushes = [
+                  v for v in items
+                  if v.get('result') == 'push'
+              ]
+
+              settled = wins + losses + pushes
+              undecided = len(items) - len(settled)
+              decided = len(wins) + len(losses)
+
+              if decided:
+                  hit = (
+                      f'{100 * len(wins) / decided:.1f}%'
+                  ).replace('.', ',')
+              else:
+                  hit = 'н/д'
+
+              valid = (
+                  bool(settled)
+                  and all(
+                      v.get('odds_first_seen') is not None
+                      for v in settled
+                  )
+              )
+
+              if valid:
+                  profit = (
+                      sum(
+                          float(v['odds_first_seen']) - 1
+                          for v in wins
+                      )
+                      - len(losses)
+                  )
+
+                  performance = (
+                      fmt(profit)
+                      + ' од. | ROI '
+                      + fmt(
+                          100 * profit / len(settled),
+                          1
+                      )
+                      + '%'
+                  )
+              else:
+                  performance = 'н/д | ROI н/д'
+
+              known = sum(
+                  v.get('odds_first_seen') is not None
+                  for v in items
+              )
+
+              return (
+                  f'👤 {label}\n'
+                  f'⚽ Прогнозів: {len(items)}\n'
+                  f'✅ {len(wins)}  '
+                  f'❌ {len(losses)}  '
+                  f'↩️ {len(pushes)}  '
+                  f'⏳ {undecided}\n'
+                  f'🎯 Прохідність: {hit}\n'
+                  f'💰 Прибуток: {performance}\n'
+                  f'🔎 Коефіцієнти: '
+                  f'{known}/{len(items)}'
+              )
+
+          def report(
+              start, end, label, combined=False
+          ):
+              rows = entries(start, end)
+
+              heading = (
+                  '📊 FOOTBALL TIPS — '
+                  + label
+                  + '\n━━━━━━━━━━━━━\n\n'
+              )
+
+              if combined:
+                  return (
+                      heading
+                      + summary(rows, 'Обидва разом')
+                  )
+
+              return (
+                  heading
+                  + summary(
+                      entries(
+                          start,
+                          end,
+                          'Geobetting'
+                      ),
+                      'Geobetting'
+                  )
+                  + '\n\n'
+                  + summary(
+                      entries(
+                          start,
+                          end,
+                          'tipstonga'
+                      ),
+                      'tipstonga'
+                  )
+                  + '\n\n'
+                  + summary(
+                      rows,
+                      '🏆 ОБИДВА РАЗОМ'
+                  )
+                  + '\n\nℹ️ ROI за 1 одиницю '
+                  'на кожен підтверджений прогноз.'
+              )
+
+          def pending_page(page):
+              rows = sorted(
+                  [
+                      (k, v)
+                      for k, v in entries()
+                      if v.get('result') not in (
+                          'win', 'loss', 'push'
+                      )
+                  ],
+                  key=lambda kv: first_seen(kv[1]),
+                  reverse=True
+              )
+
+              max_page = max(
+                  0,
+                  (len(rows) - 1) // 4
+              )
+              page = max(
+                  0,
+                  min(page, max_page)
+              )
+
+              text = (
+                  f'⏳ БЕЗ РЕЗУЛЬТАТУ: {len(rows)}\n'
+                  f'Сторінка {page + 1}/{max_page + 1}\n'
+              )
+
+              buttons = []
+
+              for key, item in rows[
+                  page * 4:(page + 1) * 4
+              ]:
+                  text += (
+                      '\n⚽ '
+                      + str(item.get('fixture'))
+                      + '\n👤 '
+                      + str(item.get('author'))
+                      + '\n🎯 '
+                      + str(item.get('selection'))
+                      + '\n'
+                  )
+
+                  buttons.append([
+                      (
+                          '✅ Виграш',
+                          'r:w:' + key[:16]
+                      ),
+                      (
+                          '❌ Програш',
+                          'r:l:' + key[:16]
+                      ),
+                      (
+                          '↩️ Повернення',
+                          'r:p:' + key[:16]
+                      ),
+                  ])
+
+              nav = []
+
+              if page:
+                  nav.append((
+                      '⬅️',
+                      f'pending:{page - 1}'
+                  ))
+
+              if page < max_page:
+                  nav.append((
+                      'Далі ➡️',
+                      f'pending:{page + 1}'
+                  ))
+
+              if nav:
+                  buttons.append(nav)
+
+              return text, buttons + BACK
 
           def view(key):
-              dt=now(); start=month_start(dt); end=shift(start,1)
-              if key in ('start','menu'):
-                  return '⚽ FOOTBALL TIPS ALERTS\n\nОбери розділ:',MENU
-              if key=='help':
-                  return ('❔ Допомога\nНатискай кнопки.\n'
-                          '/month 2026-10 — потрібний місяць\n'
-                          '/stats, /total, /history, /last3, /last6, /last12, /alltime\n'
-                          '⏱ Відповідь під час наступного запуску GitHub Actions.'),BACK
-              if key=='stats':return report(start,end,dt.strftime('%m.%Y')),BACK
-              if key=='total':return report(start,end,dt.strftime('%m.%Y'),True),BACK
-              if key=='compare':return report(dt-timedelta(days=30),dt,'ОСТАННІ 30 ДНІВ'),BACK
-              if key in ('last3','last6','last12'):
-                  months=int(key[4:])
-                  return report(shift(start,1-months),dt,f'ОСТАННІ {months} МІСЯЦІВ'),BACK
-              if key=='alltime':return report(None,None,'ЗА ВЕСЬ ЧАС'),BACK
-              if key.startswith('pending'):
-                  page=int(key.split(':')[1]) if ':' in key and key.split(':')[1].isdigit() else 0
-                  return pending_view(page)
-              periods=sorted({d.strftime('%Y-%m') for v in snaps.values() if (d:=first_seen(v))},reverse=True)
-              if key in ('history','archive'):
-                  buttons=[[('📅 '+p,'m:'+p)] for p in periods[:24]]+BACK
-                  return ('📚 АРХІВ МІСЯЦІВ\n'+'\n'.join(periods[:24])
-                          if periods else '📚 Архів поки порожній.'),buttons
-              if re.fullmatch(r'm:20\d{2}-(0[1-9]|1[0-2])',key):
-                  year,month=map(int,key[2:].split('-'))
-                  s=datetime(year,month,1,tzinfo=KYIV)
-                  return report(s,shift(s,1),key[2:]),[[('⬅️ Архів','archive')]]
-              return 'Невідома команда. Відкрий /menu',BACK
+              dt = now()
+              start = month_start(dt)
+              end = shift(start, 1)
 
-          def process_updates():
-              updates=api('getUpdates',{'offset':int(state.get('telegram_update_id',0)),
-                                         'limit':100,'timeout':0})
-              for upd in updates:
-                  callback=upd.get('callback_query')
-                  message=(callback.get('message') or {}) if callback else (upd.get('message') or {})
-                  if str((message.get('chat') or {}).get('id'))!=chat_id:
-                      state['telegram_update_id']=upd['update_id']+1;save();continue
+              if key in ('start', 'menu'):
+                  return (
+                      '⚽ FOOTBALL TIPS ALERTS\n\n'
+                      'Обери розділ:',
+                      MENU
+                  )
+
+              if key == 'help':
+                  return (
+                      '❔ Кнопки відкривають '
+                      'статистику та архів.\n'
+                      '/month 2026-10 — конкретний місяць.\n'
+                      'Результати позначай кнопками '
+                      'у розділі «Результати».\n'
+                      '⏱ Відповіді надходять після '
+                      'запуску GitHub Actions.',
+                      BACK
+                  )
+
+              if key == 'stats':
+                  return (
+                      report(
+                          start,
+                          end,
+                          dt.strftime('%m.%Y')
+                      ),
+                      BACK
+                  )
+
+              if key == 'total':
+                  return (
+                      report(
+                          start,
+                          end,
+                          dt.strftime('%m.%Y'),
+                          True
+                      ),
+                      BACK
+                  )
+
+              if key == 'compare':
+                  return (
+                      report(
+                          dt - timedelta(days=30),
+                          dt,
+                          'ОСТАННІ 30 ДНІВ'
+                      ),
+                      BACK
+                  )
+
+              if key in (
+                  'last3', 'last6', 'last12'
+              ):
+                  n = int(key[4:])
+
+                  return (
+                      report(
+                          shift(start, 1 - n),
+                          dt,
+                          f'ОСТАННІ {n} МІСЯЦІВ'
+                      ),
+                      BACK
+                  )
+
+              if key == 'alltime':
+                  return (
+                      report(
+                          None,
+                          None,
+                          'ЗА ВЕСЬ ЧАС'
+                      ),
+                      BACK
+                  )
+
+              if key.startswith('pending'):
+                  part = key.split(':')
+
+                  if (
+                      len(part) > 1
+                      and part[1].isdigit()
+                  ):
+                      page = int(part[1])
+                  else:
+                      page = 0
+
+                  return pending_page(page)
+
+              periods = sorted({
+                  d.strftime('%Y-%m')
+                  for v in snapshots.values()
+                  if (d := first_seen(v))
+              }, reverse=True)
+
+              if key in ('archive', 'history'):
+                  if periods:
+                      title = (
+                          '📚 АРХІВ МІСЯЦІВ\n'
+                          + '\n'.join(periods[:24])
+                      )
+                  else:
+                      title = '📚 Архів поки порожній.'
+
+                  buttons = [
+                      [
+                          (
+                              '📅 ' + p,
+                              'm:' + p
+                          )
+                      ]
+                      for p in periods[:24]
+                  ]
+
+                  return title, buttons + BACK
+
+              if re.fullmatch(
+                  r'm:20\d{2}-(0[1-9]|1[0-2])',
+                  key
+              ):
+                  year, month = map(
+                      int,
+                      key[2:].split('-')
+                  )
+
+                  s = datetime(
+                      year,
+                      month,
+                      1,
+                      tzinfo=KYIV
+                  )
+
+                  return (
+                      report(
+                          s,
+                          shift(s, 1),
+                          key[2:]
+                      ),
+                      [[('⬅️ Архів', 'archive')]]
+                  )
+
+              return (
+                  'Команду не розпізнано. /menu',
+                  BACK
+              )
+
+          def commands():
+              updates = api(
+                  'getUpdates',
+                  {
+                      'offset': int(
+                          state.get(
+                              'telegram_update_id',
+                              0
+                          )
+                      ),
+                      'timeout': 0,
+                      'limit': 100,
+                  }
+              )
+
+              for update in updates:
+                  callback = update.get(
+                      'callback_query'
+                  )
+
+                  if callback:
+                      message = (
+                          callback.get('message') or {}
+                      )
+                  else:
+                      message = (
+                          update.get('message') or {}
+                      )
+
+                  incoming_chat = str(
+                      (
+                          message.get('chat') or {}
+                      ).get('id')
+                  )
+
+                  if incoming_chat != CHAT:
+                      state['telegram_update_id'] = (
+                          update['update_id'] + 1
+                      )
+                      save()
+                      continue
+
                   try:
                       if callback:
-                          key=callback.get('data','menu')
-                          try:api('answerCallbackQuery',{'callback_query_id':callback['id']})
-                          except Exception:pass
+                          key = callback.get(
+                              'data', 'menu'
+                          )
+
+                          try:
+                              api(
+                                  'answerCallbackQuery',
+                                  {
+                                      'callback_query_id':
+                                      callback['id']
+                                  }
+                              )
+                          except Exception:
+                              pass
+
                           if key.startswith('r:'):
-                              parts=key.split(':',2)
-                              if len(parts)==3 and parts[1] in ('w','l','p'):
-                                  ids=[k for k in snaps if k.startswith(parts[2])]
-                                  if len(ids)==1:
-                                      obj=snaps[ids[0]]
-                                      if obj.get('result') in (None,'pending'):
-                                          obj['result']={'w':'win','l':'loss','p':'push'}[parts[1]]
-                                          obj['settled_at']=now().isoformat(timespec='seconds')
-                                          save()
-                                          send('✅ Результат збережено: '+str(obj.get('fixture')),[[('⏳ Інші прогнози','pending:0')]]+BACK)
-                                          continue
-                              send('Цей результат уже збережений або запис не знайдено.',BACK)
+                              bits = key.split(':', 2)
+
+                              ids = [
+                                  k for k in snapshots
+                                  if (
+                                      len(bits) == 3
+                                      and k.startswith(
+                                          bits[2]
+                                      )
+                                  )
+                              ]
+
+                              if (
+                                  len(bits) == 3
+                                  and bits[1] in (
+                                      'w', 'l', 'p'
+                                  )
+                                  and len(ids) == 1
+                                  and snapshots[
+                                      ids[0]
+                                  ].get(
+                                      'result', 'pending'
+                                  ) == 'pending'
+                              ):
+                                  item = snapshots[
+                                      ids[0]
+                                  ]
+
+                                  item['result'] = {
+                                      'w': 'win',
+                                      'l': 'loss',
+                                      'p': 'push'
+                                  }[bits[1]]
+
+                                  item['settled_at'] = (
+                                      now().isoformat(
+                                          timespec='seconds'
+                                      )
+                                  )
+
+                                  save()
+
+                                  send(
+                                      '✅ Результат збережено: '
+                                      + str(
+                                          item.get('fixture')
+                                      ),
+                                      [
+                                          [
+                                              (
+                                                  '⏳ Наступні',
+                                                  'pending:0'
+                                              )
+                                          ]
+                                      ] + BACK
+                                  )
+                              else:
+                                  send(
+                                      'Результат уже збережено '
+                                      'або запис не знайдено.',
+                                      BACK
+                                  )
+
                           else:
-                              output,buttons=view(key)
-                              try:send(output,buttons,edit=message['message_id'])
-                              except Exception:send(output,buttons)
+                              result, buttons = view(key)
+
+                              try:
+                                  send(
+                                      result,
+                                      buttons,
+                                      edit=message[
+                                          'message_id'
+                                      ]
+                                  )
+                              except Exception:
+                                  send(
+                                      result,
+                                      buttons
+                                  )
+
                       else:
-                          text=(message.get('text') or '').strip()
-                          if not text.startswith('/'):continue
-                          parts=text.split()
-                          cmd=parts[0].split('@')[0].lower().lstrip('/')
-                          if cmd=='month' and len(parts)==2:cmd='m:'+parts[1]
-                          if cmd in ('start','menu'):cmd='menu'
-                          output,buttons=view(cmd)
-                          send(output,buttons)
+                          raw = (
+                              message.get('text') or ''
+                          ).strip()
+
+                          if not raw.startswith('/'):
+                              continue
+
+                          words = raw.split()
+
+                          key = (
+                              words[0]
+                              .split('@')[0]
+                              .lower()
+                              .lstrip('/')
+                          )
+
+                          if (
+                              key == 'month'
+                              and len(words) == 2
+                          ):
+                              key = 'm:' + words[1]
+
+                          result, buttons = view(key)
+
+                          send(
+                              result,
+                              buttons
+                          )
+
                   finally:
-                      state['telegram_update_id']=upd['update_id']+1
+                      state['telegram_update_id'] = (
+                          update['update_id'] + 1
+                      )
                       save()
-              print('Telegram updates:',len(updates))
 
-          commands=[('menu','Кнопкове меню'),('stats','Статистика місяця'),
-                    ('total','Обидва каппери разом'),('history','Архів місяців'),
-                    ('pending','Підтвердити результати'),('alltime','За весь час')]
-          try:api('setMyCommands',{'commands':json.dumps([
-              {'command':c,'description':d} for c,d in commands],ensure_ascii=False)})
-          except Exception as ex:print('Telegram menu warning:',type(ex).__name__)
-          process_updates()
+              print(
+                  'Telegram updates:',
+                  len(updates)
+              )
 
-          current=now()
-          if current.day==1:
-              previous=shift(month_start(current),-1)
-              period=previous.strftime('%Y-%m')
-              if state.get('last_monthly_report')!=period:
-                  send(report(previous,month_start(current),'ПІДСУМКИ '+period),MENU)
-                  state['last_monthly_report']=period
+          try:
+              api(
+                  'setMyCommands',
+                  {
+                      'commands': json.dumps([
+                          {
+                              'command': c,
+                              'description': d
+                          }
+                          for c, d in [
+                              ('menu', 'Кнопкове меню'),
+                              ('stats', 'Статистика місяця'),
+                              ('total', 'Обидва разом'),
+                              ('history', 'Архів місяців'),
+                              ('pending', 'Підтвердити результати'),
+                              ('alltime', 'Увесь час'),
+                          ]
+                      ], ensure_ascii=False)
+                  }
+              )
+          except Exception as exc:
+              print(
+                  'MENU WARNING',
+                  type(exc).__name__
+              )
+
+          commands()
+
+          current = now()
+
+          if current.day == 1:
+              previous = shift(
+                  month_start(current),
+                  -1
+              )
+
+              period = previous.strftime(
+                  '%Y-%m'
+              )
+
+              if (
+                  state.get('last_monthly_report')
+                  != period
+              ):
+                  send(
+                      report(
+                          previous,
+                          month_start(current),
+                          'ПІДСУМКИ ' + period
+                      ),
+                      MENU
+                  )
+
+                  state['last_monthly_report'] = period
                   save()
 
-          all_tips=[]; errors=[]
-          with sync_playwright() as pw:
-              browser=pw.chromium.launch(headless=True)
-              try:
-                  for author,url in SOURCES.items():
-                      body,html=page_data(browser,author,url)
-                      if body is None:
-                          print('WARNING: skipped incomplete page for',author)
-                          errors.append(author)
-                          continue
-                      try:
-                          found=parse_geobetting(body) if author=='Geobetting' else parse_tipstonga(body)
-                          odds_from_html(html,found)
-                          all_tips.extend(found)
-                          print('Found',len(found),'tips for',author)
-                      except Exception as ex:
-                          print('WARNING: parser error:',author,str(ex))
-                          errors.append(author)
-              finally:browser.close()
+          found_tips = []
+          failed = []
 
-          by_match={}
-          for t in all_tips:by_match.setdefault(t['match_key'],[]).append(t)
-          new=0; restored=0
-          for t in all_tips:
-              if t['id'] not in snaps:
-                  snaps[t['id']]={'author':t['author'],'fixture':t['home']+' v '+t['away'],
-                                  'date':t['date'],'selection':t['selection'],'market':t['market'],
-                                  'odds_first_seen':t['odds'],'first_seen_at':now().isoformat(timespec='seconds'),
-                                  'source':t['url'],'result':'pending',
-                                  'recovered':t['id'] in seen}
-                  if t['id'] in seen:restored+=1
-              if t['id'] in seen:continue
-              msg=('⚽ НОВИЙ ПРОГНОЗ\n━━━━━━━━━━━━━\n'
-                   f'👤 {t["author"]}\n🏟 {t["home"]} — {t["away"]}\n'
-                   f'📅 {t["date"]}\n📊 {MARKETS[t["market"]]}\n'
-                   f'🎯 {t["selection"]}\n💰 OLBG: {t["odds"] or "н/д"}\n'
-                   f'🕘 Виявлено: {now().strftime("%d.%m.%Y %H:%M")} (Київ)\n')
-              if t['time']:msg+='🕒 Час OLBG: '+t['time']+'\n'
-              others=[a for a in by_match.get(t['match_key'],[]) if a['author']!=t['author']]
-              if others:
-                  msg+='\n⚠️ ІНШИЙ КАППЕР НА ЦЕЙ МАТЧ:\n'
-                  for other in others:msg+=f'• {other["author"]}: {other["selection"]}\n'
-              msg+='\n🔗 '+t['url']
-              send(msg,[[('📊 Статистика','stats'),('🏠 Меню','menu')]])
+          with sync_playwright() as playwright:
+              browser = playwright.chromium.launch(
+                  headless=True
+              )
+
+              try:
+                  for author, url in SOURCES.items():
+                      page_text, html = read_with_browser(
+                          browser, author, url
+                      )
+
+                      if page_text is None:
+                          print(
+                              'FALLBACK HTTP',
+                              author
+                          )
+
+                          page_text, html = read_with_http(
+                              author, url
+                          )
+
+                      if page_text is None:
+                          failed.append(author)
+
+                          print(
+                              'UNVERIFIED SOURCE:',
+                              author,
+                              'not equivalent to zero tips'
+                          )
+                          continue
+
+                      try:
+                          if author == 'Geobetting':
+                              tips = parse_geobetting(
+                                  page_text
+                              )
+                          else:
+                              tips = parse_tipstonga(
+                                  page_text
+                              )
+
+                          verified_odds(
+                              html,
+                              tips
+                          )
+
+                          found_tips.extend(tips)
+
+                          print(
+                              'CHECKED',
+                              author,
+                              'tips',
+                              len(tips)
+                          )
+
+                      except Exception as exc:
+                          failed.append(author)
+
+                          print(
+                              'PARSE WARNING',
+                              author,
+                              str(exc)
+                          )
+
+              finally:
+                  browser.close()
+
+          groups = {}
+
+          for t in found_tips:
+              groups.setdefault(
+                  t['match_key'],
+                  []
+              ).append(t)
+
+          new = 0
+          restored = 0
+
+          for t in found_tips:
+              if t['id'] not in snapshots:
+                  snapshots[t['id']] = {
+                      'author': t['author'],
+                      'fixture': (
+                          t['home']
+                          + ' v '
+                          + t['away']
+                      ),
+                      'date': t['date'],
+                      'selection': t['selection'],
+                      'market': t['market'],
+                      'odds_first_seen': t['odds'],
+                      'first_seen_at': (
+                          now().isoformat(
+                              timespec='seconds'
+                          )
+                      ),
+                      'source': t['url'],
+                      'result': 'pending',
+                      'recovered': t['id'] in seen,
+                  }
+
+                  if t['id'] in seen:
+                      restored += 1
+
+              if t['id'] in seen:
+                  continue
+
+              msg = (
+                  '⚽ НОВИЙ ПРОГНОЗ\n'
+                  '━━━━━━━━━━━━━\n'
+                  f'👤 {t["author"]}\n'
+                  f'🏟 {t["home"]} — {t["away"]}\n'
+                  f'📅 {t["date"]}\n'
+                  f'📊 {MARKETS[t["market"]]}\n'
+                  f'🎯 {t["selection"]}\n'
+                  f'💰 OLBG: {t["odds"] or "н/д"}\n'
+                  '🕘 Виявлено: '
+                  + now().strftime(
+                      '%d.%m.%Y %H:%M'
+                  )
+                  + ' (Київ)\n'
+              )
+
+              if t['time']:
+                  msg += (
+                      '🕒 Час OLBG: '
+                      + t['time']
+                      + '\n'
+                  )
+
+              others = [
+                  x for x in groups.get(
+                      t['match_key'],
+                      []
+                  )
+                  if x['author'] != t['author']
+              ]
+
+              old = matches.get(
+                  t['match_key'],
+                  []
+              )
+
+              for x in old:
+                  if x.get(
+                      'author',
+                      x.get('tipster')
+                  ) != t['author']:
+                      others.append(x)
+
+              unique = {}
+
+              for x in others:
+                  unique[(
+                      x.get(
+                          'author',
+                          x.get('tipster')
+                      ),
+                      x['market'],
+                      x['selection']
+                  )] = x
+
+              if unique:
+                  msg += (
+                      '\n⚠️ ІНШИЙ КАППЕР '
+                      'НА ЦЕЙ МАТЧ:\n'
+                  )
+
+                  for x in unique.values():
+                      msg += (
+                          '• '
+                          + str(
+                              x.get(
+                                  'author',
+                                  x.get('tipster')
+                              )
+                          )
+                          + ': '
+                          + x['selection']
+                          + '\n'
+                      )
+
+              msg += '\n🔗 ' + t['url']
+
+              send(
+                  msg,
+                  [
+                      [
+                          (
+                              '📊 Статистика',
+                              'stats'
+                          ),
+                          (
+                              '🏠 Меню',
+                              'menu'
+                          )
+                      ]
+                  ]
+              )
+
               seen.add(t['id'])
-              old=matches.setdefault(t['match_key'],[])
-              if not any(x.get('author',x.get('tipster'))==t['author'] and
-                         x.get('market')==t['market'] and x.get('selection')==t['selection'] for x in old):
-                  old.append({'author':t['author'],'market':t['market'],'selection':t['selection']})
-              save();new+=1
+
+              previous = matches.setdefault(
+                  t['match_key'],
+                  []
+              )
+
+              if not any(
+                  x.get(
+                      'author',
+                      x.get('tipster')
+                  ) == t['author']
+                  and x.get('market') == t['market']
+                  and x.get('selection') == t['selection']
+                  for x in previous
+              ):
+                  previous.append({
+                      'author': t['author'],
+                      'market': t['market'],
+                      'selection': t['selection'],
+                  })
+
+              save()
+              new += 1
+
+          failed = sorted(set(failed))
+
+          previous_failed = sorted(
+              state.get('unavailable_sources', [])
+          )
+
+          if failed != previous_failed:
+              if failed:
+                  send(
+                      '⚠️ OLBG: не вдалося перевірити '
+                      + ', '.join(failed)
+                      + '. Це не означає, що '
+                      'прогнозів немає. Наступні '
+                      'запуски повторять перевірку.',
+                      BACK
+                  )
+
+              elif previous_failed:
+                  send(
+                      '✅ OLBG: перевірка всіх '
+                      'капперів відновилась.',
+                      BACK
+                  )
+
+              state['unavailable_sources'] = failed
+
           save()
-          print('New tips:',new,'Recovered:',restored,'Unavailable sources:',','.join(errors) or 'none')
+
+          print(
+              'New tips:',
+              new,
+              'Recovered:',
+              restored,
+              'Unverified sources:',
+              ', '.join(failed) or 'none'
+          )
+
           print('Monitoring complete')
           PY
