@@ -37,19 +37,26 @@
   },
   "snapshots": {},
   "telegram_update_id": 209510903,
-  "unavailable_sources": [
-    "tipstonga"
-  ],
+  "unavailable_sources": [],
   "source_status": {
     "Geobetting": {
-      "status": "✅ перевірено: 0 прогнозів",
-      "checked_at": "28.10.2026 00:33",
-      "method": "browser"
+      "status": "✅ поточні: 0 прогнозів",
+      "checked_at": "28.10.2026 00:48",
+      "method": "HTTP",
+      "checks": [
+        "current:empty(0)",
+        "history:ok"
+      ]
     },
     "tipstonga": {
-      "status": "⚠️ джерело недоступне / не підтверджене",
-      "checked_at": "28.10.2026 00:33",
-      "reason": "No verified tips section"
+      "status": "✅ поточні: 0 прогнозів",
+      "checked_at": "28.10.2026 00:48",
+      "method": "HTTP",
+      "checks": [
+        "current:empty(0)",
+        "history:ok",
+        "profile:ok"
+      ]
     }
   }
 }
