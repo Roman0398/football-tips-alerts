@@ -17,1958 +17,519 @@ jobs:
   monitor:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-
     steps:
       - uses: actions/checkout@v4
         with:
           ref: main
           fetch-depth: 0
-
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-
       - name: Install browser
         run: |
-          pip install beautifulsoup4 playwright
-          python -m playwright install --with-deps chromium
-
-      - name: Monitor tips, results and Telegram
+          pip install playwright beautifulsoup4
+          python -m playwright install chromium
+      - name: Monitor OLBG and results
         env:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           CHAT_ID: ${{ secrets.CHAT_ID }}
         run: |
           python3 -u - <<'PY'
-          import hashlib
-          import json
-          import os
-          import re
-          import subprocess
-          import unicodedata
-          import urllib.parse
-          import urllib.request
-
+          import hashlib, json, os, re, subprocess, unicodedata
+          import urllib.parse, urllib.request
           from datetime import datetime, timedelta
           from pathlib import Path
           from zoneinfo import ZoneInfo
-
           from bs4 import BeautifulSoup
           from playwright.sync_api import sync_playwright
 
+          KYIV, LONDON = ZoneInfo('Europe/Kyiv'), ZoneInfo('Europe/London')
+          STATE = Path('.state/football-tips.json')
           SOURCES = {
-              'Geobetting':
-                  'https://www.olbg.com/tipsters/tips/420769',
-              'tipstonga':
-                  'https://www.olbg.com/best-tipsters/Football/1/13000',
+              'Geobetting': 'https://www.olbg.com/tipsters/tips/420769',
+              'tipstonga': 'https://www.olbg.com/best-tipsters/Football/1/13000',
           }
-
           MARKETS = {
-              'Full Time Result': 'Результат матчу',
-              'Result': 'Результат матчу',
-              'Total Goals': 'Тотал голів',
-              'Both Teams to Score': 'Обидві заб’ють',
-              'Asian Hcap': 'Азійська фора',
-              'Result and BTTS': 'Результат + ОЗ',
-              'Total Corners': 'Кутові',
-              'Total Cards': 'Картки',
-              'Correct Score': 'Точний рахунок',
-              'Half Time Result': 'Перший тайм',
-              'Half Time/Full Time': 'Тайм / матч',
-              'Anytime Goalscorer': 'Автор гола',
+              'Result': 'Результат матчу', 'Full Time Result': 'Результат матчу',
+              'Both Teams to Score': 'Обидві заб’ють', 'Total Goals': 'Тотал голів',
+              'Asian Hcap': 'Азійська фора', 'Correct Score': 'Точний рахунок',
+              'Result and BTTS': 'Результат + ОЗ', 'Total Corners': 'Кутові',
+              'Total Cards': 'Картки', 'Half Time Result': 'Перший тайм',
+              'Half Time/Full Time': 'Тайм / матч', 'Anytime Goalscorer': 'Автор гола',
               'First Goalscorer': 'Перший гол',
           }
-
-          ALIASES = {
-              'roma': 'as roma',
-              'man utd': 'manchester united',
-              'man united': 'manchester united',
-              'man city': 'manchester city',
-              'spurs': 'tottenham hotspur',
-              'tottenham': 'tottenham hotspur',
-              'psg': 'paris saint germain',
-              'barca': 'barcelona',
-              'fc barcelona': 'barcelona',
-              'inter milan': 'internazionale',
-              'ac milan': 'milan',
-              'bayern': 'bayern munich',
-              'como 1907': 'como',
-              'torino fc': 'torino',
-          }
-
-          FIXTURE = re.compile(
-              r'^(?:(\d{1,2}:\d{2})\s+)?'
-              r'(.+?)\s+v\s+(.+)$',
-              re.I
-          )
-
-          DATE = re.compile(
-              r'^\d{1,2} [A-Za-z]+ 20\d{2}$'
-          )
-
-          KYIV = ZoneInfo('Europe/Kyiv')
-          LONDON = ZoneInfo('Europe/London')
-
-          STATE = Path('.state/football-tips.json')
-
-          TOKEN = os.getenv('BOT_TOKEN', '').strip()
-          CHAT = os.getenv('CHAT_ID', '').strip()
-
-          if not TOKEN or not CHAT:
-              raise RuntimeError(
-                  'BOT_TOKEN and CHAT_ID are required'
-              )
-
-          if STATE.exists():
-              state = json.loads(
-                  STATE.read_text(encoding='utf-8')
-              )
-          else:
-              state = {}
-
+          FIXTURE = re.compile(r'^(?:(\d{1,2}:\d{2})\s+)?(.+?)\s+v\s+(.+)$', re.I)
+          DATE = re.compile(r'^\d{1,2} [A-Za-z]+ 20\d{2}$')
+          TOKEN, CHAT = os.getenv('BOT_TOKEN', '').strip(), os.getenv('CHAT_ID', '').strip()
+          if not TOKEN or not CHAT: raise RuntimeError('BOT_TOKEN / CHAT_ID missing')
+          state = json.loads(STATE.read_text(encoding='utf-8')) if STATE.exists() else {}
           seen = set(state.get('seen', []))
           snaps = state.setdefault('snapshots', {})
           matches = state.setdefault('matches', {})
+          def now(): return datetime.now(KYIV)
 
-          def now():
-              return datetime.now(KYIV)
+          def json_request(url, data=None):
+              body = urllib.parse.urlencode(data).encode() if data is not None else None
+              req = urllib.request.Request(url, data=body, headers={'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json'})
+              with urllib.request.urlopen(req, timeout=22) as response: return json.load(response)
 
-          def request_json(url, params=None, post=False):
-              data = (
-                  urllib.parse.urlencode(
-                      params or {}
-                  ).encode()
-                  if post else None
-              )
-
-              request = urllib.request.Request(
-                  url,
-                  data=data,
-                  headers={
-                      'User-Agent':
-                          'Mozilla/5.0 FootballTipsMonitor/1.0'
-                  }
-              )
-
-              with urllib.request.urlopen(
-                  request,
-                  timeout=22
-              ) as response:
-                  return json.load(response)
-
-          def telegram(method, params=None):
-              result = request_json(
-                  'https://api.telegram.org/bot'
-                  + TOKEN + '/' + method,
-                  params,
-                  True
-              )
-
-              if not result.get('ok'):
-                  raise RuntimeError(
-                      'Telegram error: ' + method
-                  )
-
-              return result['result']
+          def api(method, params=None):
+              data = json_request('https://api.telegram.org/bot'+TOKEN+'/'+method, params or {})
+              if not data.get('ok'): raise RuntimeError('Telegram rejected '+method)
+              return data['result']
 
           MENU = [
-              [
-                  ('📊 Цей місяць', 'stats'),
-                  ('🏆 Разом', 'total'),
-              ],
-              [
-                  ('📈 30 днів', 'compare'),
-                  ('📚 Архів', 'archive'),
-              ],
-              [
-                  ('📅 3 місяці', 'last3'),
-                  ('📅 6 місяців', 'last6'),
-              ],
-              [
-                  ('📅 12 місяців', 'last12'),
-                  ('♾ Весь час', 'alltime'),
-              ],
-              [
-                  ('⏳ Очікують', 'pending'),
-                  ('❔ Допомога', 'help'),
-              ],
+              [('📊 Цей місяць','stats'),('🏆 Разом','total')],
+              [('📈 30 днів','compare'),('📚 Архів','archive')],
+              [('📅 3 місяці','last3'),('📅 6 місяців','last6')],
+              [('📅 12 місяців','last12'),('♾ Весь час','alltime')],
+              [('⏳ Очікують','pending'),('🔎 Джерела','sources')],
+              [('❔ Допомога','help')],
           ]
-
-          BACK = [
-              [('⬅️ Меню', 'menu')]
-          ]
-
-          def send(text, buttons=None, edit=None):
-              data = {
-                  'chat_id': CHAT,
-                  'text': text[:4096],
-                  'disable_web_page_preview': 'true',
-              }
-
-              if buttons is not None:
-                  data['reply_markup'] = json.dumps(
-                      {
-                          'inline_keyboard': [
-                              [
-                                  {
-                                      'text': name,
-                                      'callback_data': key
-                                  }
-                                  for name, key in row
-                              ]
-                              for row in buttons
-                          ]
-                      },
-                      ensure_ascii=False
-                  )
-
+          BACK = [[('⬅️ Головне меню','menu')]]
+          def send(text, rows=None, edit=None):
+              params = {'chat_id': CHAT, 'text': text[:4096], 'disable_web_page_preview': 'true'}
+              if rows is not None:
+                  params['reply_markup'] = json.dumps({'inline_keyboard': [
+                      [{'text': label, 'callback_data': key} for label,key in row] for row in rows
+                  ]}, ensure_ascii=False)
               if edit is not None:
-                  data['message_id'] = edit
-
-                  return telegram(
-                      'editMessageText',
-                      data
-                  )
-
-              return telegram('sendMessage', data)
+                  params['message_id'] = edit
+                  return api('editMessageText', params)
+              return api('sendMessage', params)
 
           def save():
               state['seen'] = sorted(seen)
+              STATE.parent.mkdir(parents=True, exist_ok=True)
+              STATE.write_text(json.dumps(state, indent=2, ensure_ascii=False), encoding='utf-8')
+              subprocess.run(['git','add',str(STATE)], check=True)
+              change = subprocess.run(['git','diff','--cached','--quiet']).returncode
+              if change == 0: return
+              if change != 1: raise RuntimeError('git diff error')
+              subprocess.run(['git','-c','user.name=github-actions[bot]',
+                  '-c','user.email=41898282+github-actions[bot]@users.noreply.github.com',
+                  'commit','-m','Update football tip archive'], check=True)
+              subprocess.run(['git','push','origin','HEAD:main'], check=True)
 
-              STATE.parent.mkdir(
-                  parents=True,
-                  exist_ok=True
-              )
-
-              STATE.write_text(
-                  json.dumps(
-                      state,
-                      ensure_ascii=False,
-                      indent=2
-                  ),
-                  encoding='utf-8'
-              )
-
-              subprocess.run(
-                  ['git', 'add', str(STATE)],
-                  check=True
-              )
-
-              status = subprocess.run(
-                  [
-                      'git',
-                      'diff',
-                      '--cached',
-                      '--quiet'
-                  ]
-              ).returncode
-
-              if status == 0:
-                  return
-
-              if status != 1:
-                  raise RuntimeError('git diff failed')
-
-              subprocess.run([
-                  'git',
-                  '-c',
-                  'user.name=github-actions[bot]',
-                  '-c',
-                  'user.email=41898282+github-actions[bot]@users.noreply.github.com',
-                  'commit',
-                  '-m',
-                  'Update football tips archive',
-              ], check=True)
-
-              subprocess.run([
-                  'git',
-                  'push',
-                  'origin',
-                  'HEAD:main',
-              ], check=True)
-
-          def norm(value):
-              value = ''.join(
-                  c for c in unicodedata.normalize(
-                      'NFKD',
-                      str(value).casefold()
-                  )
-                  if not unicodedata.combining(c)
-              )
-
-              value = re.sub(
-                  r'[^a-z0-9]+',
-                  ' ',
-                  value
-              ).strip()
-
-              return ALIASES.get(value, value)
-
-          def tip(
-              author,
-              day,
-              clock,
-              home,
-              away,
-              market,
-              choice
-          ):
-              match = (
-                  day + '|'
-                  + '|'.join(
-                      sorted([
-                          norm(home),
-                          norm(away)
-                      ])
-                  )
-              )
-
-              raw = '|'.join([
-                  author,
-                  match,
-                  market,
-                  choice.casefold().strip()
-              ])
-
-              uid = hashlib.sha256(
-                  raw.encode()
-              ).hexdigest()
-
-              return {
-                  'id': uid,
-                  'author': author,
-                  'date': day,
-                  'time': clock,
-                  'home': home,
-                  'away': away,
-                  'market': market,
-                  'selection': choice,
-                  'match_key': match,
-                  'url': SOURCES[author],
-                  'odds': None,
-              }
+          ALIASES = {'roma':'as roma','barca':'barcelona','man utd':'manchester united',
+                     'man city':'manchester city','spurs':'tottenham hotspur',
+                     'psg':'paris saint germain','como 1907':'como','torino fc':'torino'}
+          def norm(s):
+              s = ''.join(c for c in unicodedata.normalize('NFKD',str(s).casefold()) if not unicodedata.combining(c))
+              s = re.sub(r'[^a-z0-9]+',' ',s).strip()
+              return ALIASES.get(s,s)
+          def make_tip(author,day,clock,home,away,market,selection):
+              fixture = day+'|'+'|'.join(sorted([norm(home),norm(away)]))
+              raw = '|'.join([author,fixture,market,selection.casefold().strip()])
+              return dict(id=hashlib.sha256(raw.encode()).hexdigest(), author=author,
+                          date=day,time=clock,home=home,away=away,market=market,
+                          selection=selection,match_key=fixture,odds=None,url=SOURCES[author])
 
           def parse_geobetting(body):
-              if (
-                  'geobetting has no current tips'
-                  in body.casefold()
-              ):
-                  return []
-
-              lines = [
-                  x.strip()
-                  for x in body.splitlines()
-                  if x.strip()
-              ]
-
-              start = next(
-                  i for i, x in enumerate(lines)
-                  if "geobetting's tips"
-                  in x.casefold()
-              )
-
-              lines = lines[start + 1:]
-
-              stop = next(
-                  (
-                      i for i, x in enumerate(lines)
-                      if 'tips are normally settled'
-                      in x.casefold()
-                  ),
-                  len(lines)
-              )
-
+              lower = body.casefold()
+              if "geobetting's tips" not in lower: raise ValueError('Profile heading missing')
+              if 'geobetting has no current tips' in lower: return []
+              lines = [x.strip() for x in body.splitlines() if x.strip()]
+              start = next(i for i,x in enumerate(lines) if "geobetting's tips" in x.casefold())
+              lines = lines[start+1:]
+              stop = next((i for i,x in enumerate(lines) if 'tips are normally settled' in x.casefold()),len(lines))
               lines = lines[:stop]
-
-              day = home = away = clock = None
-              found = []
-
-              for i, line in enumerate(lines):
+              day=clock=home=away=None; found=[]
+              for i,line in enumerate(lines):
                   if DATE.fullmatch(line):
-                      day = datetime.strptime(
-                          line,
-                          '%d %B %Y'
-                      ).date().isoformat()
-
-                      home = away = clock = None
-
+                      day = datetime.strptime(line,'%d %B %Y').date().isoformat()
+                      home=away=clock=None
                   elif day and FIXTURE.fullmatch(line):
-                      clock, home, away = (
-                          FIXTURE.fullmatch(line).groups()
-                      )
-
+                      clock,home,away = FIXTURE.fullmatch(line).groups()
                   elif line in MARKETS and day and home and i:
-                      choice = lines[i - 1]
-
-                      if (
-                          choice not in MARKETS
-                          and choice not in (
-                              '@',
-                              'WIN',
-                              '50 WIN'
-                          )
-                          and len(choice) < 120
-                          and not FIXTURE.fullmatch(choice)
-                      ):
-                          found.append(
-                              tip(
-                                  'Geobetting',
-                                  day,
-                                  clock,
-                                  home,
-                                  away,
-                                  line,
-                                  choice
-                              )
-                          )
-
-              if (
-                  not found
-                  and any(
-                      DATE.fullmatch(x)
-                      for x in lines
-                  )
-              ):
-                  raise ValueError(
-                      'Active tips were not parsed'
-                  )
-
-              return list({
-                  x['id']: x
-                  for x in found
-              }.values())
+                      choice = lines[i-1]
+                      if choice not in MARKETS and len(choice)<120 and not FIXTURE.fullmatch(choice):
+                          found.append(make_tip('Geobetting',day,clock,home,away,line,choice))
+              if not found and any(DATE.fullmatch(x) for x in lines):
+                  raise ValueError('Geobetting tips not parsed')
+              return list({x['id']:x for x in found}.values())
 
           def parse_tipstonga(body):
-              lines = [
-                  x.strip()
-                  for x in body.splitlines()
-                  if x.strip()
-              ]
-
-              marker = next(
-                  (
-                      i for i, x in enumerate(lines)
-                      if x.casefold() == 'today tips'
-                  ),
-                  None
-              )
-
-              if marker is None:
-                  raise ValueError(
-                      'Today Tips section absent'
-                  )
-
-              lines = lines[marker + 1:]
-
-              stop = next(
-                  (
-                      i for i, x in enumerate(lines)
-                      if x.startswith(
-                          'Profits calculated to a'
-                      )
-                  ),
-                  len(lines)
-              )
-
+              lines = [x.strip() for x in body.splitlines() if x.strip()]
+              marker = next((i for i,x in enumerate(lines) if x.casefold()=='today tips'),None)
+              if marker is None: raise ValueError('Today Tips section not provided by OLBG')
+              lines = lines[marker+1:]
+              stop = next((i for i,x in enumerate(lines) if x.startswith('Profits calculated to a')),len(lines))
               lines = lines[:stop]
-
               today = datetime.now(LONDON).date()
-
-              found = []
-              fixtures = 0
-
-              for i, line in enumerate(lines):
-                  m = FIXTURE.fullmatch(line)
-
-                  if not m or i == 0:
-                      continue
-
-                  fixtures += 1
-
-                  clock, home, away = m.groups()
-                  choice = lines[i - 1]
-
-                  following = lines[i + 1:i + 9]
-
-                  market = next(
-                      (
-                          x for x in following
-                          if x in MARKETS
-                      ),
-                      None
-                  )
-
-                  if (
-                      not market
-                      or choice in MARKETS
-                      or choice in (
-                          'SELECTION',
-                          'WIN',
-                          'ODDS',
-                          'VALUE RATING'
-                      )
-                  ):
-                      continue
-
-                  day = None
-
-                  for j, val in enumerate(following):
-                      if val in (
-                          'Today',
-                          'Tomorrow'
-                      ):
-                          day = (
-                              today + timedelta(
-                                  days=int(
-                                      val == 'Tomorrow'
-                                  )
-                              )
-                          ).isoformat()
-
-                          if (
-                              j + 1 < len(following)
-                              and re.fullmatch(
-                                  r'\d{1,2}:\d{2}',
-                                  following[j + 1]
-                              )
-                          ):
-                              clock = following[j + 1]
-
+              found=[]; fixtures=0
+              for i,line in enumerate(lines):
+                  match = FIXTURE.fullmatch(line)
+                  if not match or i==0: continue
+                  fixtures+=1
+                  clock,home,away=match.groups()
+                  choice=lines[i-1]
+                  following=lines[i+1:i+10]
+                  market=next((x for x in following if x in MARKETS),None)
+                  if not market or choice in MARKETS: continue
+                  day=None
+                  for j,x in enumerate(following):
+                      if x in ('Today','Tomorrow'):
+                          day=(today+timedelta(days=int(x=='Tomorrow'))).isoformat()
+                          if j+1<len(following) and re.fullmatch(r'\d{1,2}:\d{2}',following[j+1]):
+                              clock=following[j+1]
                           break
-
-                      if DATE.fullmatch(val):
-                          day = datetime.strptime(
-                              val,
-                              '%d %B %Y'
-                          ).date().isoformat()
-
+                      if DATE.fullmatch(x):
+                          day=datetime.strptime(x,'%d %B %Y').date().isoformat()
                           break
+                  if day: found.append(make_tip('tipstonga',day,clock,home,away,market,choice))
+              result=list({x['id']:x for x in found}.values())
+              if fixtures!=len(result): raise ValueError('tipstonga partially parsed')
+              return result
 
-                  if day:
-                      found.append(
-                          tip(
-                              'tipstonga',
-                              day,
-                              clock,
-                              home,
-                              away,
-                              market,
-                              choice
-                          )
-                      )
-
-              unique = list({
-                  x['id']: x
-                  for x in found
-              }.values())
-
-              if fixtures != len(unique):
-                  raise ValueError(
-                      'Partial tipstonga parsing'
-                  )
-
-              return unique
-
-          def add_odds(html, tips):
-              soup = BeautifulSoup(
-                  html,
-                  'html.parser'
-              )
-
+          def odds_from_html(html,tips):
+              soup=BeautifulSoup(html,'html.parser')
+              nodes=soup.select('span.ui-odds[data-decimal]')
               for t in tips:
-                  values = set()
-
-                  for node in soup.select(
-                      'span.ui-odds[data-decimal]'
-                  ):
-                      raw = node.get(
-                          'data-decimal',
-                          ''
-                      )
-
-                      if not re.fullmatch(
-                          r'\d+(?:\.\d+)?',
-                          raw
-                      ):
-                          continue
-
-                      if not 1.01 <= float(raw) <= 1000:
-                          continue
-
+                  values=set()
+                  for node in nodes:
+                      value=node.get('data-decimal','')
+                      if not re.fullmatch(r'\d+(?:\.\d+)?',value): continue
                       for parent in node.parents:
-                          if parent.name in (
-                              'body',
-                              'html',
-                              '[document]'
-                          ):
+                          if parent.name in ('body','html','[document]'): break
+                          context=' '.join(parent.stripped_strings)
+                          if len(context)>3500: break
+                          if (t['home']+' v '+t['away']).casefold() in context.casefold():
+                              if (t['selection'].casefold() in context.casefold()
+                                  and t['market'].casefold() in context.casefold()
+                                  and len(parent.select('span.ui-odds[data-decimal]'))==1):
+                                  values.add(value)
                               break
+                  if len(values)==1: t['odds']=next(iter(values))
+                  print('ODDS',t['author'],t['home'],'v',t['away'],t['odds'])
 
-                          text = ' '.join(
-                              parent.stripped_strings
-                          )
-
-                          if len(text) > 3500:
-                              break
-
-                          phrase = (
-                              t['home']
-                              + ' v '
-                              + t['away']
-                          )
-
-                          if (
-                              phrase.casefold()
-                              in text.casefold()
-                          ):
-                              if (
-                                  t['selection'].casefold()
-                                  in text.casefold()
-                                  and t['market'].casefold()
-                                  in text.casefold()
-                                  and len(
-                                      parent.select(
-                                          'span.ui-odds[data-decimal]'
-                                      )
-                                  ) == 1
-                              ):
-                                  values.add(raw)
-
-                              break
-
-                  if len(values) == 1:
-                      t['odds'] = next(iter(values))
-
-                  print(
-                      'ODDS',
-                      t['author'],
-                      t['home'],
-                      'v',
-                      t['away'],
-                      t['odds']
-                  )
-
-          def load_page(browser, author, url):
-              for attempt in range(1, 4):
-                  page = browser.new_page(
-                      viewport={
-                          'width': 1280,
-                          'height': 900
-                      }
-                  )
-
+          def fetch_page(browser,author,url):
+              for attempt in range(1,3):
+                  page=browser.new_page(viewport={'width':1280,'height':900},locale='en-GB')
                   try:
-                      response = page.goto(
-                          url,
-                          wait_until='domcontentloaded',
-                          timeout=40000
-                      )
-
-                      if (
-                          response
-                          and response.status >= 400
-                      ):
-                          raise ValueError(
-                              'HTTP '
-                              + str(response.status)
-                          )
-
-                      try:
-                          page.get_by_text(
-                              'Accept all',
-                              exact=True
-                          ).last.click(timeout=1300)
-                      except Exception:
-                          pass
-
-                      page.wait_for_timeout(
-                          4000 if attempt == 1 else 6500
-                      )
-
-                      body = page.locator(
-                          'body'
-                      ).inner_text(timeout=12000)
-
-                      if author == 'Geobetting':
-                          valid = (
-                              "geobetting's tips"
-                              in body.casefold()
-                          )
-                      else:
-                          valid = (
-                              'today tips' in body.casefold()
-                              and 'tipstonga'
-                              in body.casefold()
-                          )
-
-                      print(
-                          'PAGE',
-                          author,
-                          attempt,
-                          'characters',
-                          len(body),
-                          'valid',
-                          valid
-                      )
-
-                      if valid:
-                          return body, page.content()
-
+                      response=page.goto(url,wait_until='domcontentloaded',timeout=35000)
+                      if response and response.status>=400: raise RuntimeError('HTTP '+str(response.status))
+                      try: page.get_by_text('Accept all',exact=True).last.click(timeout=1000)
+                      except Exception: pass
+                      page.wait_for_timeout(4000)
+                      body=page.locator('body').inner_text(timeout=10000)
+                      print('BROWSER',author,'attempt',attempt,'chars',len(body),
+                            'today_tips','today tips' in body.casefold())
+                      if author=='Geobetting' and "geobetting's tips" in body.casefold():
+                          return body,page.content(),'browser'
+                      if author=='tipstonga' and 'today tips' in body.casefold():
+                          return body,page.content(),'browser'
+                      if attempt==2:
+                          headings=[x.get_text(' ',strip=True) for x in BeautifulSoup(page.content(),'html.parser').select('h1,h2,h3')][:10]
+                          print('DIAGNOSTIC',author,'headings',headings)
                   except Exception as exc:
-                      print(
-                          'PAGE WARNING',
-                          author,
-                          type(exc).__name__,
-                          str(exc)[:140]
-                      )
-
-                  finally:
-                      page.close()
-
-              return None, None
+                      print('BROWSER ERROR',author,type(exc).__name__,str(exc)[:100])
+                  finally: page.close()
+              try:
+                  req=urllib.request.Request(url,headers={'User-Agent':'Mozilla/5.0','Accept-Language':'en-GB,en;q=0.9'})
+                  with urllib.request.urlopen(req,timeout=20) as response:
+                      raw=response.read(2_000_000).decode('utf-8',errors='replace')
+                  soup=BeautifulSoup(raw,'html.parser')
+                  for element in soup(['script','style','noscript']): element.decompose()
+                  body=soup.get_text('\n',strip=True)
+                  print('HTTP',author,'chars',len(body),'today_tips','today tips' in body.casefold())
+                  if ((author=='Geobetting' and "geobetting's tips" in body.casefold())
+                      or (author=='tipstonga' and 'today tips' in body.casefold()):
+                      return body,raw,'http'
+              except Exception as exc:
+                  print('HTTP ERROR',author,type(exc).__name__,str(exc)[:100])
+              return None,None,None
 
           def first_seen(item):
               try:
-                  value = datetime.fromisoformat(
-                      item['first_seen_at']
-                  )
-
-                  if value.tzinfo is None:
-                      return value.replace(
-                          tzinfo=KYIV
-                      )
-
-                  return value.astimezone(KYIV)
-
-              except (
-                  KeyError,
-                  ValueError,
-                  TypeError
-              ):
-                  return None
-
-          def entries(
-              start=None,
-              end=None,
-              author=None
-          ):
-              rows = []
-
-              for key, item in snaps.items():
-                  dt = first_seen(item)
-
-                  if (
-                      dt is None
-                      or (start and dt < start)
-                      or (end and dt >= end)
-                  ):
-                      continue
-
-                  if (
-                      author
-                      and item.get('author') != author
-                  ):
-                      continue
-
-                  rows.append((key, item))
-
-              return rows
-
-          def month_start(dt):
-              return datetime(
-                  dt.year,
-                  dt.month,
-                  1,
-                  tzinfo=KYIV
-              )
-
-          def shift(dt, n):
-              index = (
-                  dt.year * 12
-                  + dt.month - 1 + n
-              )
-
-              return datetime(
-                  index // 12,
-                  index % 12 + 1,
-                  1,
-                  tzinfo=KYIV
-              )
-
-          def fmt(value, decimals=2):
-              return (
-                  f'{value:+.{decimals}f}'
-              ).replace('.', ',')
-
-          def summary(rows, label):
-              items = [
-                  v for _, v in rows
-              ]
-
-              wins = [
-                  v for v in items
-                  if v.get('result') == 'win'
-              ]
-
-              losses = [
-                  v for v in items
-                  if v.get('result') == 'loss'
-              ]
-
-              pushes = [
-                  v for v in items
-                  if v.get('result') == 'push'
-              ]
-
-              halfwins = [
-                  v for v in items
-                  if v.get('result') == 'half_win'
-              ]
-
-              halflosses = [
-                  v for v in items
-                  if v.get('result') == 'half_loss'
-              ]
-
-              settled = (
-                  wins
-                  + losses
-                  + pushes
-                  + halfwins
-                  + halflosses
-              )
-
-              pending = len(items) - len(settled)
-
-              known = sum(
-                  v.get('odds_first_seen') is not None
-                  for v in items
-              )
-
-              decided = len(wins) + len(losses)
-
-              if decided:
-                  hit = (
-                      f'{100 * len(wins) / decided:.1f}%'
-                  ).replace('.', ',')
-              else:
-                  hit = 'н/д'
-
-              valid = (
-                  bool(settled)
-                  and all(
-                      v.get('odds_first_seen') is not None
-                      for v in settled
-                  )
-              )
-
-              if valid:
-                  net = (
-                      sum(
-                          float(v['odds_first_seen']) - 1
-                          for v in wins
-                      )
-                      + sum(
-                          (
-                              float(
-                                  v['odds_first_seen']
-                              ) - 1
-                          ) / 2
-                          for v in halfwins
-                      )
-                      - len(losses)
-                      - 0.5 * len(halflosses)
-                  )
-
-                  performance = (
-                      fmt(net)
-                      + ' од. | ROI '
-                      + fmt(
-                          100 * net / len(settled),
-                          1
-                      )
-                      + '%'
-                  )
-              else:
-                  performance = 'н/д | ROI н/д'
-
-              return (
-                  f'👤 {label}\n'
-                  f'⚽ Прогнозів: {len(items)}\n'
-                  f'✅ {len(wins)}  '
-                  f'❌ {len(losses)}  '
-                  f'↩️ {len(pushes)}  '
-                  f'⏳ {pending}\n'
-                  f'◐ Піввиграшів: {len(halfwins)}  '
-                  f'Півпрограшів: {len(halflosses)}\n'
-                  f'🎯 Прохідність: {hit}\n'
-                  f'💰 Прибуток: {performance}\n'
-                  f'🔎 Коефіцієнти: '
-                  f'{known}/{len(items)}'
-              )
-
-          def report(
-              start,
-              end,
-              label,
-              combined=False
-          ):
-              title = (
-                  '📊 FOOTBALL TIPS — '
-                  + label
-                  + '\n━━━━━━━━━━━━━\n\n'
-              )
-
-              rows = entries(start, end)
-
-              if combined:
-                  return (
-                      title
-                      + summary(
-                          rows,
-                          'Обидва разом'
-                      )
-                  )
-
-              return (
-                  title
-                  + summary(
-                      entries(
-                          start,
-                          end,
-                          'Geobetting'
-                      ),
-                      'Geobetting'
-                  )
-                  + '\n\n'
-                  + summary(
-                      entries(
-                          start,
-                          end,
-                          'tipstonga'
-                      ),
-                      'tipstonga'
-                  )
-                  + '\n\n'
-                  + summary(
-                      rows,
-                      '🏆 ОБИДВА РАЗОМ'
-                  )
-                  + '\n\nℹ️ Розрахунок: '
-                  '1 одиниця на кожен '
-                  'підтверджений прогноз.'
-              )
-
-          def pending_view():
-              rows = [
-                  (k, v)
-                  for k, v in entries()
-                  if (
-                      v.get('result', 'pending')
-                      == 'pending'
-                  )
-              ]
-
-              rows.sort(
-                  key=lambda kv: first_seen(kv[1]),
-                  reverse=True
-              )
-
-              msg = (
-                  '⏳ НЕПІДТВЕРДЖЕНІ ПРОГНОЗИ: '
-                  + str(len(rows))
-              )
-
-              for _, v in rows[:12]:
-                  msg += (
-                      '\n\n⚽ '
-                      + str(v.get('fixture'))
-                      + '\n👤 '
-                      + str(v.get('author'))
-                      + '\n🎯 '
-                      + str(v.get('selection'))
-                      + '\n📅 '
-                      + str(v.get('date'))
-                  )
-
-              if not rows:
-                  msg += (
-                      '\nУсі збережені прогнози '
-                      'вже розраховані.'
-                  )
-
-              return msg, BACK
-
+                  date=datetime.fromisoformat(item['first_seen_at'])
+                  return date.replace(tzinfo=KYIV) if date.tzinfo is None else date.astimezone(KYIV)
+              except (KeyError,TypeError,ValueError): return None
+          def entries(start=None,end=None,author=None):
+              result=[]
+              for key,v in snaps.items():
+                  date=first_seen(v)
+                  if date is None or (start and date<start) or (end and date>=end): continue
+                  if author and v.get('author')!=author: continue
+                  result.append((key,v))
+              return result
+          def month_start(dt): return datetime(dt.year,dt.month,1,tzinfo=KYIV)
+          def shift(dt,n):
+              i=dt.year*12+dt.month-1+n
+              return datetime(i//12,i%12+1,1,tzinfo=KYIV)
+          def fmt(x,digits=2): return f'{x:+.{digits}f}'.replace('.',',')
+          RESULTS=('win','loss','push','half_win','half_loss')
+          def summary(rows,label):
+              items=[v for _,v in rows]
+              wins=[v for v in items if v.get('result')=='win']
+              losses=[v for v in items if v.get('result')=='loss']
+              pushes=[v for v in items if v.get('result')=='push']
+              halfwins=[v for v in items if v.get('result')=='half_win']
+              halflosses=[v for v in items if v.get('result')=='half_loss']
+              settled=[v for v in items if v.get('result') in RESULTS]
+              pending=len(items)-len(settled)
+              n=len(wins)+len(losses)
+              hit=f'{100*len(wins)/n:.1f}%'.replace('.',',') if n else 'н/д'
+              known=sum(v.get('odds_first_seen') is not None for v in items)
+              if settled and all(v.get('odds_first_seen') is not None for v in settled):
+                  profit=(sum(float(v['odds_first_seen'])-1 for v in wins)
+                          +sum((float(v['odds_first_seen'])-1)/2 for v in halfwins)
+                          -len(losses)-len(halflosses)/2)
+                  perf=fmt(profit)+' од. | ROI '+fmt(profit/len(settled)*100,1)+'%'
+              else: perf='н/д | ROI н/д'
+              return (f'👤 {label}\n⚽ Прогнозів: {len(items)}\n'
+                      f'✅ {len(wins)}  ❌ {len(losses)}  ↩️ {len(pushes)}  ⏳ {pending}\n'
+                      f'◐ Піввиграші: {len(halfwins)}  Півпрограші: {len(halflosses)}\n'
+                      f'🎯 Прохідність: {hit}\n💰 Прибуток: {perf}\n'
+                      f'🔎 Коефіцієнти: {known}/{len(items)}')
+          def report(start,end,label,combined=False):
+              heading='📊 FOOTBALL TIPS — '+label+'\n━━━━━━━━━━━━━\n\n'
+              if combined: return heading+summary(entries(start,end),'Обидва разом')
+              return (heading+summary(entries(start,end,'Geobetting'),'Geobetting')+'\n\n'
+                      +summary(entries(start,end,'tipstonga'),'tipstonga')+'\n\n'
+                      +summary(entries(start,end),'🏆 ОБИДВА РАЗОМ')
+                      +'\n\nℹ️ Статистика лише з виявлених ботом ставок. ROI за 1 од. на ставку.')
           def view(key):
-              dt = now()
-              start = month_start(dt)
+              dt=now(); start=month_start(dt)
+              if key in ('start','menu'): return '⚽ FOOTBALL TIPS ALERTS\n\nОбери розділ:',MENU
+              if key=='help': return ('❔ Результати розраховуються автоматично, якщо рахунок і ринок підтверджені. '
+                                      'Непідтверджені прогнози залишаються в очікуванні.\n'
+                                      '/month 2026-10 — вибраний місяць.\n'
+                                      'Кнопки обробляються під час наступного GitHub Actions запуску.'),BACK
+              if key=='sources':
+                  parts=['🔎 СТАН ДЖЕРЕЛ']
+                  for name in SOURCES:
+                      data=state.get('source_status',{}).get(name,{})
+                      parts.append(f'\n{name}: {data.get("status","ще не перевірено")}\nОстання перевірка: {data.get("checked_at","н/д")}')
+                  return '\n'.join(parts),BACK
+              if key=='stats': return report(start,shift(start,1),dt.strftime('%m.%Y')),BACK
+              if key=='total': return report(start,shift(start,1),dt.strftime('%m.%Y'),True),BACK
+              if key=='compare': return report(dt-timedelta(days=30),dt,'ОСТАННІ 30 ДНІВ'),BACK
+              if key in ('last3','last6','last12'):
+                  n=int(key[4:]); return report(shift(start,1-n),dt,f'ОСТАННІ {n} МІСЯЦІВ'),BACK
+              if key=='alltime': return report(None,None,'ЗА ВЕСЬ ЧАС'),BACK
+              if key.startswith('pending'):
+                  rows=sorted([(k,v) for k,v in entries() if v.get('result') not in RESULTS],
+                              key=lambda kv:first_seen(kv[1]),reverse=True)
+                  text='⏳ ОЧІКУЮТЬ РЕЗУЛЬТАТУ: '+str(len(rows))
+                  for _,v in rows[:12]: text+='\n\n⚽ '+str(v.get('fixture'))+'\n👤 '+str(v.get('author'))+'\n🎯 '+str(v.get('selection'))
+                  if len(rows)>12: text+='\n\nПоказані останні 12.'
+                  return text,BACK
+              periods=sorted({d.strftime('%Y-%m') for v in snaps.values() if (d:=first_seen(v))},reverse=True)
+              if key in ('history','archive'):
+                  buttons=[[('📅 '+p,'m:'+p)] for p in periods[:24]]+BACK
+                  return ('📚 АРХІВ МІСЯЦІВ\n'+'\n'.join(periods[:24]) if periods else '📚 Архів порожній.'),buttons
+              if re.fullmatch(r'm:20\d{2}-(0[1-9]|1[0-2])',key):
+                  y,m=map(int,key[2:].split('-')); s=datetime(y,m,1,tzinfo=KYIV)
+                  return report(s,shift(s,1),key[2:]),[[('⬅️ Архів','archive')]]
+              return 'Невідома команда. /menu',BACK
 
-              if key in ('start', 'menu'):
-                  return (
-                      '⚽ FOOTBALL TIPS ALERTS\n\n'
-                      'Обери розділ:',
-                      MENU
-                  )
-
-              if key == 'help':
-                  return (
-                      '❔ Статистика оновлюється '
-                      'автоматично після підтвердженого '
-                      'результату.\n\n'
-                      'Невизначені ринки залишаються '
-                      'в очікуванні.\n\n'
-                      'Кнопки обробляються під час '
-                      'наступного запуску GitHub Actions.',
-                      BACK
-                  )
-
-              if key == 'stats':
-                  return (
-                      report(
-                          start,
-                          shift(start, 1),
-                          dt.strftime('%m.%Y')
-                      ),
-                      BACK
-                  )
-
-              if key == 'total':
-                  return (
-                      report(
-                          start,
-                          shift(start, 1),
-                          dt.strftime('%m.%Y'),
-                          True
-                      ),
-                      BACK
-                  )
-
-              if key == 'compare':
-                  return (
-                      report(
-                          dt - timedelta(days=30),
-                          dt,
-                          'ОСТАННІ 30 ДНІВ'
-                      ),
-                      BACK
-                  )
-
-              if key in (
-                  'last3',
-                  'last6',
-                  'last12'
-              ):
-                  n = int(key[4:])
-
-                  return (
-                      report(
-                          shift(start, 1 - n),
-                          dt,
-                          f'ОСТАННІ {n} МІСЯЦІВ'
-                      ),
-                      BACK
-                  )
-
-              if key == 'alltime':
-                  return (
-                      report(
-                          None,
-                          None,
-                          'ЗА ВЕСЬ ЧАС'
-                      ),
-                      BACK
-                  )
-
-              if key == 'pending':
-                  return pending_view()
-
-              if key in ('archive', 'history'):
-                  periods = sorted({
-                      d.strftime('%Y-%m')
-                      for v in snaps.values()
-                      if (d := first_seen(v))
-                  }, reverse=True)
-
-                  buttons = [
-                      [('📅 ' + p, 'm:' + p)]
-                      for p in periods[:24]
-                  ] + BACK
-
-                  if periods:
-                      title = (
-                          '📚 АРХІВ МІСЯЦІВ\n'
-                          + '\n'.join(periods[:24])
-                      )
-                  else:
-                      title = '📚 Архів поки порожній.'
-
-                  return title, buttons
-
-              if re.fullmatch(
-                  r'm:20\d{2}-(0[1-9]|1[0-2])',
-                  key
-              ):
-                  y, m = map(
-                      int,
-                      key[2:].split('-')
-                  )
-
-                  s = datetime(
-                      y,
-                      m,
-                      1,
-                      tzinfo=KYIV
-                  )
-
-                  return (
-                      report(
-                          s,
-                          shift(s, 1),
-                          key[2:]
-                      ),
-                      [
-                          [('⬅️ Архів', 'archive')]
-                      ]
-                  )
-
-              return (
-                  'Невідома команда. Натисни /menu',
-                  BACK
-              )
-
-          def process_commands():
-              updates = telegram(
-                  'getUpdates',
-                  {
-                      'offset': int(
-                          state.get(
-                              'telegram_update_id',
-                              0
-                          )
-                      ),
-                      'limit': 100,
-                      'timeout': 0
-                  }
-              )
-
+          def telegram_updates():
+              updates=api('getUpdates',{'offset':int(state.get('telegram_update_id',0)),'limit':100,'timeout':0})
               for update in updates:
-                  callback = update.get(
-                      'callback_query'
-                  )
-
-                  if callback:
-                      msg = (
-                          callback.get('message') or {}
-                      )
-                  else:
-                      msg = (
-                          update.get('message') or {}
-                      )
-
-                  actual_chat = str(
-                      (
-                          msg.get('chat') or {}
-                      ).get('id')
-                  )
-
-                  if actual_chat != CHAT:
-                      state['telegram_update_id'] = (
-                          update['update_id'] + 1
-                      )
-
-                      save()
-                      continue
-
+                  callback=update.get('callback_query')
+                  message=(callback.get('message') or {}) if callback else (update.get('message') or {})
+                  if str((message.get('chat') or {}).get('id'))!=CHAT:
+                      state['telegram_update_id']=update['update_id']+1; save(); continue
                   try:
                       if callback:
-                          try:
-                              telegram(
-                                  'answerCallbackQuery',
-                                  {
-                                      'callback_query_id':
-                                          callback['id']
-                                  }
-                              )
-                          except Exception:
-                              pass
-
-                          text, buttons = view(
-                              callback.get(
-                                  'data',
-                                  'menu'
-                              )
-                          )
-
-                          try:
-                              send(
-                                  text,
-                                  buttons,
-                                  edit=msg['message_id']
-                              )
-                          except Exception:
-                              send(
-                                  text,
-                                  buttons
-                              )
-
-                      else:
-                          text = (
-                              msg.get('text') or ''
-                          ).strip()
-
-                          if not text.startswith('/'):
+                          try: api('answerCallbackQuery',{'callback_query_id':callback['id']})
+                          except Exception: pass
+                          key=callback.get('data','menu')
+                          if key.startswith('r:'):
+                              send('ℹ️ Ручне підтвердження вимкнено. Бот перевіряє результати автоматично.',BACK)
                               continue
-
-                          parts = text.split()
-
-                          command = (
-                              parts[0]
-                              .split('@')[0]
-                              .lower()
-                              .lstrip('/')
-                          )
-
-                          if (
-                              command == 'month'
-                              and len(parts) == 2
-                          ):
-                              command = (
-                                  'm:' + parts[1]
-                              )
-
-                          content, buttons = view(
-                              command
-                          )
-
-                          send(
-                              content,
-                              buttons
-                          )
-
+                          output,buttons=view(key)
+                          try: send(output,buttons,edit=message['message_id'])
+                          except Exception: send(output,buttons)
+                      else:
+                          text=(message.get('text') or '').strip()
+                          if not text.startswith('/'): continue
+                          words=text.split(); key=words[0].split('@')[0].lower().lstrip('/')
+                          if key=='month' and len(words)==2: key='m:'+words[1]
+                          output,buttons=view(key); send(output,buttons)
+                  except Exception as exc:
+                      print('TELEGRAM UPDATE ERROR',type(exc).__name__,str(exc)[:150])
                   finally:
-                      state['telegram_update_id'] = (
-                          update['update_id'] + 1
-                      )
-
+                      state['telegram_update_id']=update['update_id']+1
                       save()
+              print('Telegram updates:',len(updates))
 
-              print(
-                  'Telegram updates:',
-                  len(updates)
-              )
-
-          def settled_from_score(
-              item,
-              home,
-              away
-          ):
-              market = item.get(
-                  'market',
-                  ''
-              )
-
-              selection = str(
-                  item.get('selection', '')
-              ).strip()
-
-              s = selection.casefold()
-              total = home + away
-
-              if market in (
-                  'Result',
-                  'Full Time Result'
-              ):
-                  if s in (
-                      'draw',
-                      'x',
-                      'tie'
-                  ):
-                      return (
-                          'win'
-                          if home == away
-                          else 'loss'
-                      )
-
-                  fixture = item.get(
-                      'fixture',
-                      ''
-                  )
-
-                  halves = re.split(
-                      r'\s+v\s+',
-                      fixture,
-                      maxsplit=1,
-                      flags=re.I
-                  )
-
-                  if len(halves) != 2:
-                      return None
-
-                  if (
-                      norm(selection)
-                      == norm(halves[0])
-                  ):
-                      return (
-                          'win'
-                          if home > away
-                          else 'loss'
-                      )
-
-                  if (
-                      norm(selection)
-                      == norm(halves[1])
-                  ):
-                      return (
-                          'win'
-                          if away > home
-                          else 'loss'
-                      )
-
-                  return None
-
-              if market == 'Both Teams to Score':
-                  if (
-                      s in (
-                          'yes',
-                          'yes (btts)',
-                          'both teams to score - yes'
-                      )
-                      or s.startswith('yes ')
-                  ):
-                      return (
-                          'win'
-                          if home > 0 and away > 0
-                          else 'loss'
-                      )
-
-                  if (
-                      s == 'no'
-                      or s.startswith('no ')
-                  ):
-                      return (
-                          'loss'
-                          if home > 0 and away > 0
-                          else 'win'
-                      )
-
-                  return None
-
-              if market == 'Total Goals':
-                  m = re.fullmatch(
-                      r'(over|under)\s+'
-                      r'(\d+(?:[.,]\d+)?)'
-                      r'\s*(?:goals)?',
-                      s
-                  )
-
-                  if not m:
-                      return None
-
-                  line = float(
-                      m.group(2).replace(',', '.')
-                  )
-
-                  if m.group(1) == 'over':
-                      if total > line:
-                          return 'win'
-
-                      if total == line:
-                          return 'push'
-
-                      return 'loss'
-
-                  if total < line:
-                      return 'win'
-
-                  if total == line:
-                      return 'push'
-
-                  return 'loss'
-
-              if market == 'Correct Score':
-                  m = re.fullmatch(
-                      r'(\d+)\s*[-:]\s*(\d+)',
-                      s
-                  )
-
-                  if m:
-                      expected = (
-                          int(m.group(1)),
-                          int(m.group(2))
-                      )
-
-                      return (
-                          'win'
-                          if (home, away) == expected
-                          else 'loss'
-                      )
-
+          def settlement(item,home,away):
+              market=item.get('market',''); choice=str(item.get('selection','')).casefold().strip()
+              teams=re.split(r'\s+v\s+',str(item.get('fixture','')),maxsplit=1,flags=re.I)
+              total=home+away
+              if market in ('Result','Full Time Result') and len(teams)==2:
+                  if choice in ('draw','x','tie'): return 'win' if home==away else 'loss'
+                  if norm(choice)==norm(teams[0]): return 'win' if home>away else 'loss'
+                  if norm(choice)==norm(teams[1]): return 'win' if away>home else 'loss'
+              if market=='Both Teams to Score':
+                  yes = home>0 and away>0
+                  if choice in ('yes','both teams to score - yes'): return 'win' if yes else 'loss'
+                  if choice in ('no','both teams to score - no'): return 'loss' if yes else 'win'
+              if market=='Correct Score':
+                  m=re.fullmatch(r'(\d+)\s*[-:]\s*(\d+)',choice)
+                  if m: return 'win' if (home,away)==(int(m[1]),int(m[2])) else 'loss'
+              if market=='Total Goals':
+                  m=re.fullmatch(r'(over|under)\s+(\d+(?:[.,]\d+)?)\s*(?:goals)?',choice)
+                  if not m: return None
+                  direction=m[1]; line=float(m[2].replace(',','.'))
+                  # Quarter-goal Asian lines need two half-stakes.
+                  if round(line*4)%2:
+                      low=int(line*2)/2
+                      high=low+0.5
+                      def part(l):
+                          if total==l: return 0
+                          win=total>l if direction=='over' else total<l
+                          return 1 if win else -1
+                      parts=[part(low),part(high)]
+                      score=sum(parts)
+                      return {2:'win',1:'half_win',0:'push',-1:'half_loss',-2:'loss'}[score]
+                  if total==line: return 'push'
+                  win=total>line if direction=='over' else total<line
+                  return 'win' if win else 'loss'
               return None
 
-          def fetch_result(item):
-              fixture = item.get(
-                  'fixture',
-                  ''
-              )
-
-              teams = re.split(
-                  r'\s+v\s+',
-                  fixture,
-                  maxsplit=1,
-                  flags=re.I
-              )
-
-              if len(teams) != 2:
-                  return None
-
-              day = item.get('date')
-
-              if not re.fullmatch(
-                  r'20\d{2}-\d{2}-\d{2}',
-                  str(day)
-              ):
-                  return None
-
-              event_name = (
-                  teams[0]
-                  + '_vs_'
-                  + teams[1]
-              )
-
-              params = urllib.parse.urlencode({
-                  'e': event_name,
-                  'd': day
-              })
-
-              url = (
-                  'https://www.thesportsdb.com/api/v1/'
-                  'json/123/searchevents.php?'
-                  + params
-              )
-
-              data = request_json(url)
-
-              events = (
-                  data.get('event')
-                  or data.get('events')
-                  or []
-              )
-
-              possible = []
-
+          # TheSportsDB free API is not guaranteed to index every event.
+          # Require exact date, exact normalized teams, final status and unique match.
+          def lookup_match(item):
+              parts=re.split(r'\s+v\s+',str(item.get('fixture','')),maxsplit=1,flags=re.I)
+              if len(parts)!=2: return None
+              day=item.get('date','')
+              try: datetime.strptime(day,'%Y-%m-%d')
+              except (TypeError,ValueError): return None
+              query=urllib.parse.urlencode({'e':parts[0]+'_vs_'+parts[1],'d':day})
+              url='https://www.thesportsdb.com/api/v1/json/123/searchevents.php?'+query
+              result=json_request(url)
+              events=result.get('event') or result.get('events') or []
+              matched=[]
               for event in events:
-                  if (
-                      event.get('strSport')
-                      != 'Soccer'
-                  ):
-                      continue
-
-                  if (
-                      event.get('dateEvent')
-                      != day
-                  ):
-                      continue
-
-                  if (
-                      norm(event.get(
-                          'strHomeTeam',
-                          ''
-                      ))
-                      != norm(teams[0])
-                  ):
-                      continue
-
-                  if (
-                      norm(event.get(
-                          'strAwayTeam',
-                          ''
-                      ))
-                      != norm(teams[1])
-                  ):
-                      continue
-
-                  status = str(
-                      event.get('strStatus', '')
-                  ).casefold()
-
-                  if status not in (
-                      'match finished',
-                      'finished',
-                      'ft',
-                      'final',
-                      'full time'
-                  ):
-                      continue
-
-                  try:
-                      h = int(
-                          event['intHomeScore']
-                      )
-
-                      a = int(
-                          event['intAwayScore']
-                      )
-
-                  except (
-                      ValueError,
-                      TypeError,
-                      KeyError
-                  ):
-                      continue
-
-                  possible.append((
-                      h,
-                      a,
-                      event.get('idEvent')
-                  ))
-
-              if len(possible) != 1:
-                  return None
-
-              return possible[0]
+                  if event.get('strSport')!='Soccer' or event.get('dateEvent')!=day: continue
+                  if norm(event.get('strHomeTeam',''))!=norm(parts[0]): continue
+                  if norm(event.get('strAwayTeam',''))!=norm(parts[1]): continue
+                  status=str(event.get('strStatus') or '').lower().strip()
+                  if status not in ('match finished','finished','ft','final','full time'): continue
+                  try: h,a=int(event['intHomeScore']),int(event['intAwayScore'])
+                  except (TypeError,ValueError,KeyError): continue
+                  matched.append((h,a,event.get('idEvent')))
+              return matched[0] if len(matched)==1 else None
 
           try:
-              telegram(
-                  'setMyCommands',
-                  {
-                      'commands': json.dumps(
-                          [
-                              {
-                                  'command': c,
-                                  'description': d
-                              }
-                              for c, d in [
-                                  (
-                                      'menu',
-                                      'Меню з кнопками'
-                                  ),
-                                  (
-                                      'stats',
-                                      'Цей місяць'
-                                  ),
-                                  (
-                                      'total',
-                                      'Обидва разом'
-                                  ),
-                                  (
-                                      'history',
-                                      'Архів місяців'
-                                  ),
-                                  (
-                                      'pending',
-                                      'Очікують результат'
-                                  ),
-                                  (
-                                      'alltime',
-                                      'Весь час'
-                                  )
-                              ]
-                          ],
-                          ensure_ascii=False
-                      )
-                  }
-              )
+              api('setMyCommands',{'commands':json.dumps([
+                  {'command':c,'description':d} for c,d in [
+                      ('menu','Кнопкове меню'),('stats','Статистика місяця'),
+                      ('total','Обидва разом'),('history','Архів'),
+                      ('pending','Очікують результату'),('alltime','За весь час')
+                  ]],ensure_ascii=False)})
+          except Exception as exc: print('MENU WARNING',type(exc).__name__)
+          telegram_updates()
 
-          except Exception as exc:
-              print(
-                  'Telegram menu warning:',
-                  type(exc).__name__
-              )
+          dt=now()
+          if dt.day==1:
+              previous=shift(month_start(dt),-1); period=previous.strftime('%Y-%m')
+              if state.get('last_monthly_report')!=period:
+                  send(report(previous,month_start(dt),'ПІДСУМКИ '+period),MENU)
+                  state['last_monthly_report']=period; save()
 
-          process_commands()
-
-          dt = now()
-
-          if dt.day == 1:
-              prev = shift(
-                  month_start(dt),
-                  -1
-              )
-
-              period = prev.strftime(
-                  '%Y-%m'
-              )
-
-              if (
-                  state.get('last_monthly_report')
-                  != period
-              ):
-                  send(
-                      report(
-                          prev,
-                          month_start(dt),
-                          'ПІДСУМКИ ' + period
-                      ),
-                      MENU
-                  )
-
-                  state['last_monthly_report'] = period
-
-                  save()
-
-          all_tips = []
-          errors = []
-
-          with sync_playwright() as pw:
-              browser = pw.chromium.launch(
-                  headless=True
-              )
-
+          tips=[]; failures=[]
+          # Each tipster source is checked separately. Missing section is UNKNOWN, not 0.
+          with sync_playwright() as playwright:
+              browser=playwright.chromium.launch(headless=True)
               try:
-                  for author, url in SOURCES.items():
-                      body, html = load_page(
-                          browser,
-                          author,
-                          url
-                      )
-
-                      if body is None:
-                          errors.append(author)
-                          continue
-
+                  for author,url in SOURCES.items():
+                      body,html,method=fetch_page(browser,author,url)
                       try:
-                          if author == 'Geobetting':
-                              tips = parse_geobetting(
-                                  body
-                              )
-                          else:
-                              tips = parse_tipstonga(
-                                  body
-                              )
-
-                          add_odds(html, tips)
-
-                          all_tips.extend(tips)
-
-                          print(
-                              'CHECKED',
-                              author,
-                              'tips',
-                              len(tips)
-                          )
-
+                          if body is None: raise ValueError('No verified tips content')
+                          result=parse_geobetting(body) if author=='Geobetting' else parse_tipstonga(body)
+                          odds_from_html(html,result)
+                          tips.extend(result)
+                          state.setdefault('source_status',{})[author]={
+                              'status':'перевірено: '+str(len(result))+' прогнозів',
+                              'checked_at':now().isoformat(timespec='minutes'),'method':method}
+                          print('CHECKED',author,'tips',len(result),'via',method)
                       except Exception as exc:
-                          errors.append(author)
+                          failures.append(author)
+                          state.setdefault('source_status',{})[author]={
+                              'status':'⚠️ неможливо підтвердити прогнози',
+                              'checked_at':now().isoformat(timespec='minutes'),'reason':str(exc)[:120]}
+                          print('UNVERIFIED SOURCE',author,str(exc))
+              finally: browser.close()
 
-                          print(
-                              'PARSER WARNING',
-                              author,
-                              str(exc)
-                          )
-
-              finally:
-                  browser.close()
-
-          grouped = {}
-
-          for t in all_tips:
-              grouped.setdefault(
-                  t['match_key'],
-                  []
-              ).append(t)
-
-          new = 0
-          recovered = 0
-
-          for t in all_tips:
+          grouped={}
+          for t in tips: grouped.setdefault(t['match_key'],[]).append(t)
+          new=0; recovered=0
+          for t in tips:
               if t['id'] not in snaps:
-                  snaps[t['id']] = {
-                      'author': t['author'],
-                      'fixture': (
-                          t['home']
-                          + ' v '
-                          + t['away']
-                      ),
-                      'selection': t['selection'],
-                      'market': t['market'],
-                      'date': t['date'],
-                      'odds_first_seen': t['odds'],
-                      'first_seen_at': now().isoformat(
-                          timespec='seconds'
-                      ),
-                      'source': t['url'],
-                      'result': 'pending',
-                      'recovered': t['id'] in seen
-                  }
-
-                  if t['id'] in seen:
-                      recovered += 1
-
-              if t['id'] in seen:
-                  continue
-
-              message = (
-                  '⚽ НОВИЙ ПРОГНОЗ\n'
-                  '━━━━━━━━━━━━━\n'
-                  f'👤 {t["author"]}\n'
-                  f'🏟 {t["home"]} — {t["away"]}\n'
-                  f'📅 {t["date"]}\n'
-                  f'📊 {MARKETS[t["market"]]}\n'
-                  f'🎯 {t["selection"]}\n'
-                  f'💰 OLBG: {t["odds"] or "н/д"}\n'
-                  f'🕘 Виявлено: '
-                  + now().strftime('%d.%m.%Y %H:%M')
-                  + ' (Київ)\n'
-              )
-
-              if t['time']:
-                  message += (
-                      '🕒 Час OLBG: '
-                      + t['time']
-                      + '\n'
-                  )
-
-              other = [
-                  x
-                  for x in grouped.get(
-                      t['match_key'],
-                      []
-                  )
-                  if x['author'] != t['author']
-              ]
-
-              other += [
-                  x
-                  for x in matches.get(
-                      t['match_key'],
-                      []
-                  )
-                  if x.get(
-                      'author',
-                      x.get('tipster')
-                  ) != t['author']
-              ]
-
+                  snaps[t['id']]={'author':t['author'],'fixture':t['home']+' v '+t['away'],
+                                  'date':t['date'],'selection':t['selection'],'market':t['market'],
+                                  'odds_first_seen':t['odds'],'first_seen_at':now().isoformat(timespec='seconds'),
+                                  'source':t['url'],'result':'pending','recovered':t['id'] in seen}
+                  if t['id'] in seen: recovered+=1
+              if t['id'] in seen: continue
+              msg=(f'⚽ НОВИЙ ПРОГНОЗ\n━━━━━━━━━━━━━\n👤 {t["author"]}\n'
+                   f'🏟 {t["home"]} — {t["away"]}\n📅 {t["date"]}\n'
+                   f'📊 {MARKETS[t["market"]]}\n🎯 {t["selection"]}\n'
+                   f'💰 OLBG: {t["odds"] or "н/д"}\n'
+                   f'🕘 Виявлено: {now().strftime("%d.%m.%Y %H:%M")} (Київ)\n')
+              if t['time']: msg+='🕒 Час OLBG: '+t['time']+'\n'
+              other=grouped.get(t['match_key'],[])
+              other=[x for x in other if x['author']!=t['author']]
+              other += [x for x in matches.get(t['match_key'],[])
+                        if x.get('author',x.get('tipster'))!=t['author']]
               if other:
-                  message += (
-                      '\n⚠️ ІНШИЙ КАППЕР '
-                      'НА ЦЕЙ МАТЧ:\n'
-                  )
-
-                  for x in other:
-                      message += (
-                          '• '
-                          + str(
-                              x.get(
-                                  'author',
-                                  x.get('tipster')
-                              )
-                          )
-                          + ': '
-                          + x['selection']
-                          + '\n'
-                      )
-
-              message += '\n🔗 ' + t['url']
-
-              send(
-                  message,
-                  [
-                      [
-                          (
-                              '📊 Статистика',
-                              'stats'
-                          ),
-                          (
-                              '🏠 Меню',
-                              'menu'
-                          )
-                      ]
-                  ]
-              )
-
+                  msg+='\n⚠️ ІНШИЙ КАППЕР НА ЦЕЙ МАТЧ:\n'
+                  unique={(x.get('author',x.get('tipster')),x['market'],x['selection']):x for x in other}
+                  for x in unique.values(): msg+='• '+str(x.get('author',x.get('tipster')))+': '+x['selection']+'\n'
+              msg+='\n🔗 '+t['url']
+              send(msg,[[('📊 Статистика','stats'),('🏠 Меню','menu')]])
               seen.add(t['id'])
+              previous=matches.setdefault(t['match_key'],[])
+              if not any(x.get('author',x.get('tipster'))==t['author'] and x.get('market')==t['market']
+                         and x.get('selection')==t['selection'] for x in previous):
+                  previous.append({'author':t['author'],'market':t['market'],'selection':t['selection']})
+              save(); new+=1
 
-              previous = matches.setdefault(
-                  t['match_key'],
-                  []
-              )
-
-              if not any(
-                  x.get(
-                      'author',
-                      x.get('tipster')
-                  ) == t['author']
-                  and x.get('market') == t['market']
-                  and x.get('selection') == t['selection']
-                  for x in previous
-              ):
-                  previous.append({
-                      'author': t['author'],
-                      'market': t['market'],
-                      'selection': t['selection']
-                  })
-
-              save()
-              new += 1
-
-          checked_matches = {}
-          settled_count = 0
-
-          for key, item in snaps.items():
-              if (
-                  item.get('result', 'pending')
-                  != 'pending'
-              ):
-                  continue
-
-              day = item.get('date')
-
-              if (
-                  not day
-                  or not re.fullmatch(
-                      r'20\d{2}-\d{2}-\d{2}',
-                      str(day)
-                  )
-              ):
-                  continue
-
-              try:
-                  age = (
-                      now().date()
-                      - datetime.strptime(
-                          day,
-                          '%Y-%m-%d'
-                      ).date()
-                  ).days
-
-              except ValueError:
-                  continue
-
-              if age < 1 or age > 21:
-                  continue
-
-              if item.get('market') not in (
-                  'Result',
-                  'Full Time Result',
-                  'Both Teams to Score',
-                  'Total Goals',
-                  'Correct Score'
-              ):
-                  continue
-
-              match_id = (
-                  item.get('fixture'),
-                  day
-              )
-
-              if match_id not in checked_matches:
-                  try:
-                      checked_matches[match_id] = (
-                          fetch_result(item)
-                      )
-
+          # Auto-settle only explicitly supported selections and confirmed final scores.
+          completed=0; cache={}
+          for key,item in snaps.items():
+              if item.get('result','pending')!='pending': continue
+              if item.get('market') not in ('Result','Full Time Result','Both Teams to Score','Total Goals','Correct Score'): continue
+              try: age=(now().date()-datetime.strptime(item['date'],'%Y-%m-%d').date()).days
+              except (ValueError,TypeError,KeyError): continue
+              if not 1<=age<=21: continue
+              ident=(item.get('fixture'),item.get('date'))
+              if ident not in cache:
+                  try: cache[ident]=lookup_match(item)
                   except Exception as exc:
-                      checked_matches[match_id] = None
-
-                      print(
-                          'RESULT LOOKUP WARNING',
-                          day,
-                          type(exc).__name__
-                      )
-
-              match_result = checked_matches[
-                  match_id
-              ]
-
-              if match_result is None:
-                  continue
-
-              home, away, event_id = match_result
-
-              verdict = settled_from_score(
-                  item,
-                  home,
-                  away
-              )
-
-              if verdict is None:
-                  continue
-
-              item['result'] = verdict
-
-              item['settled_at'] = now().isoformat(
-                  timespec='seconds'
-              )
-
-              item['final_score'] = (
-                  f'{home}:{away}'
-              )
-
-              item['result_source'] = (
-                  'TheSportsDB event '
-                  + str(event_id)
-              )
-
-              settled_count += 1
-
-              print(
-                  'AUTO SETTLED',
-                  item['author'],
-                  item['fixture'],
-                  verdict,
-                  home,
-                  away
-              )
-
+                      cache[ident]=None
+                      print('RESULT LOOKUP WARNING',type(exc).__name__,str(exc)[:100])
+              match=cache[ident]
+              if match is None: continue
+              home,away,event_id=match
+              result=settlement(item,home,away)
+              if result is None: continue
+              item['result']=result
+              item['settled_at']=now().isoformat(timespec='seconds')
+              item['final_score']=f'{home}:{away}'
+              item['result_source']='TheSportsDB '+str(event_id)
+              print('AUTO SETTLED',item['author'],item['fixture'],result,item['final_score'])
+              completed+=1
+          if completed:
               save()
+              send(f'✅ Автоматично розраховано: {completed} прогнозів.\n\n'
+                   +report(month_start(now()),shift(month_start(now()),1),now().strftime('%m.%Y')),MENU)
 
-          if settled_count:
-              start = month_start(now())
-
-              send(
-                  '✅ Автоматично розраховано '
-                  'прогнозів: '
-                  + str(settled_count)
-                  + '\n\n'
-                  + report(
-                      start,
-                      shift(start, 1),
-                      now().strftime('%m.%Y')
-                  ),
-                  MENU
-              )
-
-          errors = sorted(set(errors))
-
-          previous_errors = sorted(
-              state.get(
-                  'unavailable_sources',
-                  []
-              )
-          )
-
-          if errors != previous_errors:
-              if errors:
-                  send(
-                      '⚠️ OLBG: не вдалося '
-                      'підтвердити сторінку: '
-                      + ', '.join(errors)
-                      + '. Це не означає, що '
-                      'прогнозів немає. '
-                      'Перевірка повториться.',
-                      BACK
-                  )
-
-              elif previous_errors:
-                  send(
-                      '✅ OLBG: перевірка всіх '
-                      'капперів відновилася.',
-                      BACK
-                  )
-
-              state['unavailable_sources'] = errors
-
+          failures=sorted(set(failures))
+          previous=sorted(state.get('unavailable_sources',[]))
+          if failures!=previous:
+              if failures:
+                  send('⚠️ OLBG: не вдалося перевірити '+', '.join(failures)
+                       +'. Це НЕ означає відсутність прогнозів. Дані архіву збережені.',BACK)
+              elif previous:
+                  send('✅ Перевірка всіх джерел OLBG відновлена.',BACK)
+          state['unavailable_sources']=failures
           save()
-
-          print(
-              'SUMMARY new:',
-              new,
-              'recovered:',
-              recovered,
-              'settled:',
-              settled_count,
-              'unavailable:',
-              ','.join(errors) or 'none'
-          )
-
+          print('SUMMARY new:',new,'recovered:',recovered,'auto_settled:',completed,
+                'unverified:',','.join(failures) or 'none')
           print('Monitoring complete')
           PY
