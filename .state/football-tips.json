@@ -42,14 +42,14 @@
   ],
   "source_status": {
     "Geobetting": {
-      "status": "перевірено: 0 прогнозів",
-      "checked_at": "2026-10-28T00:17+02:00",
+      "status": "✅ перевірено: 0 прогнозів",
+      "checked_at": "28.10.2026 00:33",
       "method": "browser"
     },
     "tipstonga": {
-      "status": "⚠️ неможливо підтвердити прогнози",
-      "checked_at": "2026-10-28T00:17+02:00",
-      "reason": "No verified tips content"
+      "status": "⚠️ джерело недоступне / не підтверджене",
+      "checked_at": "28.10.2026 00:33",
+      "reason": "No verified tips section"
     }
   }
 }
