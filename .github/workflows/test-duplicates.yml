@@ -1,0 +1,152 @@
+
+name: Test Football Tips and Duplicates
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Test parsing and Telegram delivery
+        env:
+          BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          import re
+          import urllib.parse
+          import urllib.request
+
+          # Імітація тексту прогнозу OLBG
+          sample = """
+          geobetting's Tips
+          28 October 2026
+          20:00 Arsenal v Chelsea
+          Over 2.50
+          Total Goals
+          50 WIN
+          @
+          """
+
+          markets = {
+              "Total Goals": "Тотал голів",
+              "Both Teams to Score": "Обидві заб'ють",
+              "Asian Hcap": "Азійська фора",
+          }
+
+          lines = [
+              x.strip() for x in sample.splitlines()
+              if x.strip()
+          ]
+
+          date = ""
+          match = ""
+          predictions = []
+
+          for i, line in enumerate(lines):
+              if re.fullmatch(
+                  r"\d{1,2} [A-Za-z]+ 20\d{2}", line
+              ):
+                  date = line
+
+              elif re.match(
+                  r"^\d{1,2}:\d{2}\s+.+\s+v\s+.+$",
+                  line
+              ):
+                  match = line
+
+              elif line in markets and date and match:
+                  selection = lines[i - 1]
+
+                  key = hashlib.sha256(
+                      (
+                          date + "|" + match + "|"
+                          + line + "|" + selection
+                      ).encode()
+                  ).hexdigest()
+
+                  predictions.append((
+                      key, date, match,
+                      selection, line
+                  ))
+
+          assert len(predictions) == 1, (
+              "Помилка розпізнавання прогнозу"
+          )
+
+          print("TEST 1: Football tip recognized")
+
+          seen = set()
+          delivered = 0
+
+          def send(message):
+              api = (
+                  "https://api.telegram.org/bot"
+                  + os.environ["BOT_TOKEN"]
+                  + "/sendMessage"
+              )
+
+              data = urllib.parse.urlencode({
+                  "chat_id": os.environ["CHAT_ID"],
+                  "text": message,
+                  "disable_notification": "false",
+              }).encode("utf-8")
+
+              with urllib.request.urlopen(
+                  api, data=data, timeout=30
+              ) as response:
+                  result = json.load(response)
+
+              if not result.get("ok"):
+                  raise RuntimeError(
+                      "Telegram delivery failed"
+                  )
+
+          # Дві послідовні обробки тієї самої ставки
+          for attempt in range(2):
+              for key, date, match, selection, market in predictions:
+                  if key in seen:
+                      print(
+                          "TEST 3: Duplicate blocked"
+                      )
+                      continue
+
+                  uk_selection = re.sub(
+                      r"^Over\s+",
+                      "Більше ",
+                      selection,
+                      flags=re.I
+                  ).replace(".", ",")
+
+                  message = (
+                      "🧪 ТЕСТ НОВОГО ПРОГНОЗУ\n\n"
+                      "⚽ Geobetting\n"
+                      "📅 28 жовтня 2026\n"
+                      f"🏟 {match}\n"
+                      f"📊 {markets[market]}\n"
+                      f"🎯 {uk_selection}\n\n"
+                      "✅ Перевірка сповіщення\n"
+                      "🔒 Перевірка дублікатів\n\n"
+                      "ЦЕ ВИГАДАНА СТАВКА!"
+                  )
+
+                  send(message)
+                  seen.add(key)
+                  delivered += 1
+
+                  print(
+                      "TEST 2: Telegram message sent"
+                  )
+
+          assert delivered == 1, (
+              "Duplicate protection failed"
+          )
+
+          print("ALL TESTS PASSED")
+          print("Messages delivered:", delivered)
+          PY
