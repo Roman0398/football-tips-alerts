@@ -1,5 +1,6 @@
 {
   "seen": [
+    "038a7c98b07c871ca3e3678686cc66cbe0a7ebb2069c29b95edc5f2338ac0094",
     "4bf5239857ae08340d7044f4598edc2c34096bd6f497861412bfb5e43686b1df",
     "9378cc06ec2704608e97cf0618d2bffde98954a665c1108ad279518173efed23",
     "aa72e73cccdfa40931c00bf8078d0e8ee77b3840fa857555a121e8e2cdd5693e"
@@ -24,6 +25,13 @@
         "author": "tipstonga",
         "market": "Full Time Result",
         "selection": "Roma"
+      }
+    ],
+    "2026-10-27|como|torino": [
+      {
+        "author": "tipstonga",
+        "market": "Full Time Result",
+        "selection": "Draw"
       }
     ]
   }
