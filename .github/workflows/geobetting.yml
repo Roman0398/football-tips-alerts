@@ -1,5 +1,5 @@
 
-name: Geobetting Telegram Alerts
+name: Football Tips Alerts
 
 on:
   workflow_dispatch:
@@ -10,44 +10,55 @@ permissions:
   contents: write
 
 concurrency:
-  group: geobetting-monitor
+  group: football-tips-monitor
   cancel-in-progress: false
 
 jobs:
   monitor:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: true
 
       - name: Install browser
         run: |
           pip install playwright
           python -m playwright install chromium
 
-      - name: Monitor Geobetting
+      - name: Monitor both tipsters
         env:
           BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
           python3 - <<'PY'
-          import hashlib
-          import json
           import os
           import re
+          import json
+          import hashlib
+          import unicodedata
           import subprocess
-          import urllib.parse
           import urllib.request
+          import urllib.parse
           from pathlib import Path
+          from datetime import datetime, timedelta
+          from zoneinfo import ZoneInfo
           from playwright.sync_api import sync_playwright
 
-          URL = "https://www.olbg.com/tipsters/tips/420769"
-          STATE = Path(".state/geobetting-seen.json")
+          TIPSTERS = {
+              "Geobetting": "420769",
+              "tipstonga": "13000",
+          }
+
+          STATE_FILE = Path(".state/football-tips.json")
 
           MARKETS = {
-              "Both Teams to Score": "Обидві заб'ють",
-              "Total Goals": "Тотал голів",
-              "Asian Hcap": "Азійська фора",
               "Full Time Result": "Результат матчу",
+              "Total Goals": "Тотал голів",
+              "Both Teams to Score": "Обидві заб'ють",
+              "Asian Hcap": "Азійська фора",
               "Result and BTTS": "Результат + обидві заб'ють",
               "Total Corners": "Тотал кутових",
               "Total Cards": "Тотал карток",
@@ -57,6 +68,16 @@ jobs:
               "Anytime Goalscorer": "Автор гола",
               "First Goalscorer": "Перший автор гола",
           }
+
+          MATCH_RE = re.compile(
+              r"^(?:(\d{1,2}:\d{2})\s+)?"
+              r"(.+?)\s+v\s+(.+)$",
+              re.IGNORECASE
+          )
+
+          DATE_RE = re.compile(
+              r"^\d{1,2} [A-Za-z]+ 20\d{2}$"
+          )
 
           MONTHS = {
               "January": "січня",
@@ -73,30 +94,75 @@ jobs:
               "December": "грудня",
           }
 
-          def translate(s):
+          def local_date():
+              return datetime.now(
+                  ZoneInfo("Europe/London")
+              ).date()
+
+          def translate_date(value):
+              for en, uk in MONTHS.items():
+                  value = value.replace(en, uk)
+              return value
+
+          def translate(selection, market):
+              s = selection.strip()
+
+              if market == "Full Time Result":
+                  if s.lower() == "draw":
+                      return "Нічия"
+                  return "Перемога " + s
+
+              if re.fullmatch(
+                  r"Yes\s*\(BTTS\)", s, re.I
+              ):
+                  return "Обидві заб'ють — Так"
+
+              if re.fullmatch(
+                  r"No\s*\(BTTS\)", s, re.I
+              ):
+                  return "Обидві заб'ють — Ні"
+
               s = re.sub(
                   r"^Over\s+", "Більше ", s, flags=re.I
               )
               s = re.sub(
                   r"^Under\s+", "Менше ", s, flags=re.I
               )
-              s = re.sub(
-                  r"^Yes\s*\(BTTS\)$",
-                  "Так (обидві заб'ють)", s, flags=re.I
+              s = s.replace(
+                  "(AH)", "(азійська фора)"
               )
-              s = re.sub(
-                  r"^No\s*\(BTTS\)$",
-                  "Ні (обидві заб'ють)", s, flags=re.I
+              s = s.replace(
+                  "(Result + BTTS)",
+                  "(результат + обидві заб'ють)"
               )
-              s = s.replace("(AH)", "(азійська фора)")
               return s.replace(".", ",")
 
+          def normalized_team(value):
+              value = unicodedata.normalize(
+                  "NFKD", value
+              )
+              value = "".join(
+                  c for c in value
+                  if not unicodedata.combining(c)
+              )
+              value = value.casefold()
+              value = re.sub(
+                  r"[^a-z0-9а-яіїєґ]+", "", value
+              )
+              return value
+
+          def match_identity(date, home, away):
+              teams = sorted([
+                  normalized_team(home),
+                  normalized_team(away)
+              ])
+              return date + "|" + "|".join(teams)
+
           def send(message):
-              data = urllib.parse.urlencode({
-                  "chat_id": os.environ["CHAT_ID"],
-                  "text": message,
-                  "disable_web_page_preview": "true",
-              }).encode()
+              if not os.getenv("BOT_TOKEN"):
+                  raise RuntimeError("Missing BOT_TOKEN")
+              if not os.getenv("CHAT_ID"):
+                  raise RuntimeError("Missing CHAT_ID")
 
               api = (
                   "https://api.telegram.org/bot"
@@ -104,158 +170,364 @@ jobs:
                   + "/sendMessage"
               )
 
+              payload = urllib.parse.urlencode({
+                  "chat_id": os.environ["CHAT_ID"],
+                  "text": message,
+                  "disable_notification": "false",
+                  "disable_web_page_preview": "true",
+              }).encode("utf-8")
+
               with urllib.request.urlopen(
-                  api, data=data, timeout=30
+                  api, data=payload, timeout=30
               ) as response:
                   result = json.load(response)
 
               if not result.get("ok"):
-                  raise RuntimeError("Telegram send failed")
+                  raise RuntimeError(
+                      "Telegram rejected the message"
+                  )
 
-          with sync_playwright() as p:
-              browser = p.chromium.launch(headless=True)
+          def read_tips(browser, tipster, user_id):
+              url = (
+                  "https://www.olbg.com/tipsters/tips/"
+                  + user_id
+              )
+
               page = browser.new_page(
                   viewport={"width": 390, "height": 844}
               )
-              page.goto(
-                  URL,
-                  wait_until="domcontentloaded",
-                  timeout=60000
-              )
 
               try:
-                  page.get_by_text(
-                      "Accept all", exact=True
-                  ).last.click(timeout=2500)
-              except Exception:
-                  pass
-
-              page.wait_for_timeout(4000)
-              text = page.locator("body").inner_text()
-              browser.close()
-
-          if "geobetting's Tips" not in text:
-              raise RuntimeError(
-                  "OLBG Current Tips section unavailable"
-              )
-
-          if "geobetting has no current tips." in text.lower():
-              print("No active tips.")
-              raise SystemExit(0)
-
-          lines = [
-              x.strip() for x in text.splitlines()
-              if x.strip()
-          ]
-
-          start = next(
-              i for i, x in enumerate(lines)
-              if "geobetting's Tips" in x
-          )
-          lines = lines[start + 1:]
-
-          for i, x in enumerate(lines):
-              if x.startswith("Tips are normally settled"):
-                  lines = lines[:i]
-                  break
-
-          date = ""
-          match = ""
-          found = []
-
-          for i, line in enumerate(lines):
-              if re.fullmatch(
-                  r"\d{1,2} [A-Za-z]+ 20\d{2}", line
-              ):
-                  date = line
-                  match = ""
-
-              elif re.match(
-                  r"^\d{1,2}:\d{2}\s+.+\s+v\s+.+$",
-                  line
-              ):
-                  match = line
-
-              elif line in MARKETS and match and i > 0:
-                  selection = lines[i - 1]
-
-                  if len(selection) > 150:
-                      continue
-
-                  if selection in MARKETS or selection == "@":
-                      continue
-
-                  key = hashlib.sha256(
-                      (
-                          date + "|" + match + "|"
-                          + line + "|" + selection
-                      ).encode()
-                  ).hexdigest()
-
-                  found.append(
-                      (key, date, match, selection, line)
+                  page.goto(
+                      url,
+                      wait_until="domcontentloaded",
+                      timeout=60000
                   )
 
-          print("Recognized tips:", len(found))
+                  try:
+                      page.get_by_text(
+                          "Accept all", exact=True
+                      ).last.click(timeout=2500)
+                  except Exception:
+                      pass
 
-          if not found:
-              raise RuntimeError(
-                  "Active tips cannot be parsed. "
-                  "Check OLBG page structure."
+                  page.wait_for_timeout(4000)
+                  body = page.locator("body").inner_text()
+              finally:
+                  page.close()
+
+              title = tipster.lower() + "'s tips"
+
+              if title not in body.lower():
+                  raise RuntimeError(
+                      "Could not load tips for " + tipster
+                  )
+
+              if (
+                  tipster.lower()
+                  + " has no current tips."
+              ) in body.lower():
+                  print(tipster, ": no active tips")
+                  return []
+
+              lines = [
+                  x.strip()
+                  for x in body.splitlines()
+                  if x.strip()
+              ]
+
+              start = next(
+                  i for i, x in enumerate(lines)
+                  if title in x.lower()
               )
 
-          STATE.parent.mkdir(
-              parents=True, exist_ok=True
-          )
+              lines = lines[start + 1:]
 
-          seen = set(
-              json.loads(STATE.read_text())
-              if STATE.exists() else []
-          )
+              for i, line in enumerate(lines):
+                  if line.startswith(
+                      "Tips are normally settled"
+                  ):
+                      lines = lines[:i]
+                      break
 
-          for key, date, match, selection, market in found:
-              if key in seen:
-                  continue
+              tips = []
+              current_date = local_date().isoformat()
+              match_candidates = []
 
-              for en, uk in MONTHS.items():
-                  date = date.replace(en, uk)
+              for i, line in enumerate(lines):
+                  if DATE_RE.fullmatch(line):
+                      current_date = datetime.strptime(
+                          line, "%d %B %Y"
+                      ).date().isoformat()
+
+                  match = MATCH_RE.match(line)
+                  if match:
+                      match_candidates.append(
+                          (i, current_date, match)
+                      )
+
+              for i, market in enumerate(lines):
+                  if market not in MARKETS:
+                      continue
+
+                  previous = [
+                      item for item in match_candidates
+                      if item[0] < i
+                  ]
+
+                  following = [
+                      item for item in match_candidates
+                      if item[0] > i
+                  ]
+
+                  chosen = None
+
+                  if previous and i - previous[-1][0] <= 5:
+                      chosen = previous[-1]
+                      selection = lines[i - 1]
+
+                      if selection == lines[chosen[0]]:
+                          selection = (
+                              lines[chosen[0] - 1]
+                              if chosen[0] > 0 else ""
+                          )
+
+                  elif following and following[0][0] - i <= 3:
+                      chosen = following[0]
+                      selection = (
+                          lines[i - 1] if i > 0 else ""
+                      )
+                  else:
+                      continue
+
+                  index, date, fixture = chosen
+                  time = fixture.group(1) or ""
+                  home = fixture.group(2).strip()
+                  away = fixture.group(3).strip()
+
+                  if not selection or len(selection) > 120:
+                      continue
+
+                  if selection in MARKETS:
+                      continue
+
+                  if selection in ("@", "WIN", "SELECTION"):
+                      continue
+
+                  # Current Tips may use Today/Tomorrow
+                  nearby = lines[
+                      max(0, i - 3):min(len(lines), i + 5)
+                  ]
+
+                  for value in nearby:
+                      m = re.search(
+                          r"\b(Today|Tomorrow)\s+"
+                          r"(\d{1,2}:\d{2})",
+                          value, re.I
+                      )
+                      if m:
+                          days = (
+                              1 if m.group(1).lower()
+                              == "tomorrow" else 0
+                          )
+                          date = (
+                              local_date()
+                              + timedelta(days=days)
+                          ).isoformat()
+                          time = m.group(2)
+                          break
+
+                  identity = match_identity(
+                      date, home, away
+                  )
+
+                  raw = "|".join([
+                      tipster, identity,
+                      market, selection
+                  ])
+
+                  key = hashlib.sha256(
+                      raw.encode("utf-8")
+                  ).hexdigest()
+
+                  tips.append({
+                      "id": key,
+                      "tipster": tipster,
+                      "date": date,
+                      "time": time,
+                      "home": home,
+                      "away": away,
+                      "market": market,
+                      "selection": selection,
+                      "match_key": identity,
+                      "url": url,
+                  })
+
+              unique = {
+                  item["id"]: item for item in tips
+              }
+
+              print(
+                  tipster, ": recognized",
+                  len(unique), "tips"
+              )
+
+              return list(unique.values())
+
+          if STATE_FILE.exists():
+              state = json.loads(
+                  STATE_FILE.read_text(encoding="utf-8")
+              )
+          else:
+              state = {"seen": [], "matches": {}}
+
+          seen = set(state.get("seen", []))
+          matches = state.get("matches", {})
+
+          all_tips = []
+          errors = []
+
+          with sync_playwright() as p:
+              browser = p.chromium.launch(headless=True)
+
+              try:
+                  for tipster, user_id in TIPSTERS.items():
+                      try:
+                          result = read_tips(
+                              browser, tipster, user_id
+                          )
+                          all_tips.extend(result)
+                      except Exception as error:
+                          errors.append(tipster)
+                          print(
+                              "ERROR checking", tipster,
+                              ":", str(error)
+                          )
+              finally:
+                  browser.close()
+
+          if not all_tips:
+              if errors:
+                  raise RuntimeError(
+                      "Unable to check: "
+                      + ", ".join(errors)
+                  )
+
+              print("No recognized active tips.")
+              raise SystemExit(0)
+
+          new_tips = [
+              tip for tip in all_tips
+              if tip["id"] not in seen
+          ]
+
+          print("New tips:", len(new_tips))
+
+          for tip in new_tips:
+              match_key = tip["match_key"]
+              previous = matches.get(match_key, [])
+
+              other = [
+                  item for item in previous
+                  if item["tipster"] != tip["tipster"]
+              ]
+
+              uk_date = translate_date(
+                  datetime.strptime(
+                      tip["date"], "%Y-%m-%d"
+                  ).strftime("%d %B %Y")
+              )
+
+              fixture = (
+                  tip["home"] + " — " + tip["away"]
+              )
+
+              clock = (
+                  " " + tip["time"]
+                  if tip["time"] else ""
+              )
 
               message = (
-                  "⚽ Новий прогноз Geobetting\n\n"
-                  f"📅 {date}\n"
-                  f"🏟 {match}\n"
-                  f"📊 {MARKETS[market]}\n"
-                  f"🎯 {translate(selection)}\n\n"
-                  "📌 Перевір коефіцієнт перед ставкою\n"
-                  f"🔗 {URL}"
+                  "⚽ НОВИЙ ПРОГНОЗ\n\n"
+                  f"👤 Каппер: {tip['tipster']}\n"
+                  f"🏟 Матч: {fixture}\n"
+                  f"📅 Дата: {uk_date}{clock}\n"
+                  f"📊 Ринок: {MARKETS[tip['market']]}\n"
+                  f"🎯 Ставка: "
+                  f"{translate(tip['selection'], tip['market'])}\n\n"
+                  "📌 Перевір коефіцієнт у букмекера\n"
               )
+
+              if other:
+                  message += (
+                      "\n⚠️ ЗБІГ ПРОГНОЗІВ!\n"
+                      "Інший каппер також обрав цей матч.\n"
+                  )
+
+                  for item in other:
+                      message += (
+                          f"• {item['tipster']}: "
+                          f"{translate(item['selection'], item['market'])}"
+                          "\n"
+                      )
+
+                  message += (
+                      "Врахуй сумарний ризик ставок.\n"
+                  )
+
+              message += "\n🔗 " + tip["url"]
 
               send(message)
-              seen.add(key)
 
-              STATE.write_text(
-                  json.dumps(sorted(seen), indent=2)
+              seen.add(tip["id"])
+              matches.setdefault(match_key, []).append({
+                  "tipster": tip["tipster"],
+                  "selection": tip["selection"],
+                  "market": tip["market"],
+              })
+
+              # Persist after each successful delivery
+              state["seen"] = sorted(seen)
+              state["matches"] = matches
+
+              STATE_FILE.parent.mkdir(
+                  parents=True, exist_ok=True
               )
 
-              subprocess.run(
-                  ["git", "add", str(STATE)],
-                  check=True
+              STATE_FILE.write_text(
+                  json.dumps(
+                      state, ensure_ascii=False, indent=2
+                  ),
+                  encoding="utf-8"
               )
 
               subprocess.run([
-                  "git",
-                  "-c", "user.name=Geobetting Bot",
-                  "-c",
-                  "user.email=bot@users.noreply.github.com",
-                  "commit", "-m", "Save delivered tips"
+                  "git", "add", str(STATE_FILE)
               ], check=True)
 
-              subprocess.run(
-                  ["git", "push"],
-                  check=True
+              subprocess.run([
+                  "git",
+                  "-c", "user.name=github-actions[bot]",
+                  "-c",
+                  "user.email=41898282+github-actions[bot]@users.noreply.github.com",
+                  "commit",
+                  "-m", "Save football tip alerts"
+              ], check=True)
+
+              subprocess.run([
+                  "git", "push", "origin", "HEAD:main"
+              ], check=True)
+
+              print(
+                  "Sent:", tip["tipster"],
+                  fixture, tip["selection"]
               )
 
-              print("Notification delivered:", match)
+          if errors:
+              raise RuntimeError(
+                  "Some tipsters were not checked: "
+                  + ", ".join(errors)
+              )
 
-          print("Monitoring complete.")
+          print("Monitoring completed.")
           PY
