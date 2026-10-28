@@ -28,7 +28,7 @@ jobs:
         run: |
           pip install beautifulsoup4 playwright
           python -m playwright install --with-deps chromium
-      - name: Monitor tips and Telegram
+      - name: Monitor OLBG tips and send Telegram alerts
         env:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           CHAT_ID: ${{ secrets.CHAT_ID }}
@@ -415,44 +415,8 @@ jobs:
                   return report(start, shift(start, 1), key[2:]), [[('⬅️ Архів', 'archive')]]
               return 'Невідома команда. /menu', BACK
 
-          def telegram_updates():
-              updates = api('getUpdates', {'offset': int(state.get('telegram_update_id', 0)),
-                  'limit': 100, 'timeout': 0})
-              for update in updates:
-                  callback = update.get('callback_query')
-                  message = (callback.get('message') or {}) if callback else (update.get('message') or {})
-                  try:
-                      if str((message.get('chat') or {}).get('id')) != CHAT:
-                          continue
-                      if callback:
-                          try:
-                              api('answerCallbackQuery', {'callback_query_id': callback['id']})
-                          except Exception:
-                              pass
-                          key = callback.get('data', 'menu')
-                          output, buttons = view(key)
-                          try:
-                              send(output, buttons, edit=message['message_id'])
-                          except Exception:
-                              send(output, buttons)
-                      else:
-                          text = (message.get('text') or '').strip()
-                          if not text.startswith('/'):
-                              continue
-                          words = text.split()
-                          key = words[0].split('@')[0].lstrip('/').lower()
-                          if key == 'month' and len(words) == 2:
-                              key = 'm:' + words[1]
-                          output, buttons = view(key)
-                          send(output, buttons)
-                  except Exception as exc:
-                      print('TELEGRAM WARNING', type(exc).__name__, str(exc)[:150])
-                  finally:
-                      state['telegram_update_id'] = update['update_id'] + 1
-              if updates:
-                  save()
-              print('Telegram updates:', len(updates))
-
+          # Telegram commands and inline buttons are handled by Cloudflare webhook.
+          # GitHub Actions only monitors OLBG and sends outgoing notifications.
           selftest()
           try:
               api('setMyCommands', {'commands': json.dumps([
@@ -463,7 +427,6 @@ jobs:
                   ('alltime', 'Весь час')]], ensure_ascii=False)})
           except Exception as exc:
               print('COMMANDS WARNING', str(exc)[:110])
-          telegram_updates()
 
           tips = []
           failures = []
