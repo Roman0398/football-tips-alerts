@@ -65,7 +65,7 @@
       "result_olbg": "Win",
       "settlement_verified": true,
       "settled_at": "2026-10-29T15:58:28+02:00",
-      "settlement_checked_at": "2026-10-29T15:58:28+02:00",
+      "settlement_checked_at": "2026-10-29T16:52:38+02:00",
       "result_source": "https://www.olbg.com/tipsters/tips/history/411789",
       "stake_total_points": 69.0,
       "profit_points": 37.0,
@@ -146,7 +146,7 @@
       "result_olbg": "Lose",
       "settlement_verified": true,
       "settled_at": "2026-10-29T15:58:27+02:00",
-      "settlement_checked_at": "2026-10-29T15:58:27+02:00",
+      "settlement_checked_at": "2026-10-29T16:52:37+02:00",
       "result_source": "https://www.olbg.com/tipsters/tips/history/638883",
       "stake_total_points": 50.0,
       "profit_points": -50.0,
@@ -196,7 +196,7 @@
       "result_olbg": "Lose",
       "settlement_verified": true,
       "settled_at": "2026-10-29T15:58:27+02:00",
-      "settlement_checked_at": "2026-10-29T15:58:27+02:00",
+      "settlement_checked_at": "2026-10-29T16:52:37+02:00",
       "result_source": "https://www.olbg.com/tipsters/tips/history/638883",
       "stake_total_points": 50.0,
       "profit_points": -50.0,
@@ -246,7 +246,7 @@
       "result_olbg": "Lose",
       "settlement_verified": true,
       "settled_at": "2026-10-29T15:58:27+02:00",
-      "settlement_checked_at": "2026-10-29T15:58:27+02:00",
+      "settlement_checked_at": "2026-10-29T16:52:37+02:00",
       "result_source": "https://www.olbg.com/tipsters/tips/history/638883",
       "stake_total_points": 50.0,
       "profit_points": -50.0,
@@ -274,7 +274,7 @@
       "odds_olbg": 23.0,
       "odds_available": null,
       "first_seen_at": "2026-10-29T13:21:35+02:00",
-      "result": "pending",
+      "result": "loss",
       "source": "https://www.olbg.com/tipsters/tips/638883",
       "source_tip_id": "296259350",
       "source_event_id": "203616984",
@@ -292,7 +292,25 @@
       "alert_sent_at": "2026-10-29T13:21:55+02:00",
       "telegram_message_id": 21,
       "odds_olbg_latest": 23.0,
-      "odds_olbg_latest_at": "2026-10-29T14:00:52+02:00"
+      "odds_olbg_latest_at": "2026-10-29T14:00:52+02:00",
+      "result_olbg": "Lose",
+      "settlement_verified": true,
+      "settled_at": "2026-10-29T16:52:37+02:00",
+      "settlement_checked_at": "2026-10-29T16:52:37+02:00",
+      "result_source": "https://www.olbg.com/tipsters/tips/history/638883",
+      "stake_total_points": 50.0,
+      "profit_points": -50.0,
+      "olbg_settlement": {
+        "source_tip_id": "296259350",
+        "result": "Lose",
+        "odds": 23.0,
+        "stake_per_leg": 25.0,
+        "total_stake": 50.0,
+        "profit": -50.0,
+        "financial_verified": true,
+        "issue": null
+      },
+      "each_way_settlement": "OLBG combined win/place profit"
     },
     "05e4abc621610e6d1a72606e0b4fbff2997ecbf8a8d07330bd806c367e054691": {
       "id": "05e4abc621610e6d1a72606e0b4fbff2997ecbf8a8d07330bd806c367e054691",
@@ -456,7 +474,7 @@
       "result_olbg": "Lose",
       "settlement_verified": true,
       "settled_at": "2026-10-29T15:58:27+02:00",
-      "settlement_checked_at": "2026-10-29T15:58:27+02:00",
+      "settlement_checked_at": "2026-10-29T16:52:37+02:00",
       "result_source": "https://www.olbg.com/tipsters/tips/history/638883",
       "stake_total_points": 50.0,
       "profit_points": -50.0,
@@ -630,21 +648,21 @@
   "result_checks": {
     "Knottlast": {
       "status": "verified",
-      "checked_at": "2026-10-29T15:58:24+02:00",
+      "checked_at": "2026-10-29T16:52:34+02:00",
       "matched": 0,
       "not_found": 1,
       "pages": 1
     },
     "Niffler": {
       "status": "verified",
-      "checked_at": "2026-10-29T15:58:24+02:00",
-      "matched": 4,
-      "not_found": 8,
+      "checked_at": "2026-10-29T16:52:34+02:00",
+      "matched": 5,
+      "not_found": 7,
       "pages": 1
     },
     "risto123": {
       "status": "verified",
-      "checked_at": "2026-10-29T15:58:24+02:00",
+      "checked_at": "2026-10-29T16:52:34+02:00",
       "matched": 1,
       "not_found": 0,
       "pages": 1
@@ -653,25 +671,25 @@
   "monitoring_started_at": "2026-10-29T08:15:52+02:00",
   "reporting": {
     "schema": 1,
-    "generated_at": "2026-10-29T15:58:24+02:00",
+    "generated_at": "2026-10-29T16:52:34+02:00",
     "since": "2026-10-29T08:15:52+02:00",
     "periods": {
       "month": {
         "label": "10.2026",
         "total": {
           "total": 14,
-          "settled": 5,
-          "pending": 9,
+          "settled": 6,
+          "pending": 8,
           "win": 1,
-          "loss": 4,
+          "loss": 5,
           "push": 0,
           "half_win": 0,
           "half_loss": 0,
           "ew": 12,
-          "counted": 5,
-          "stake": 269.0,
-          "profit": -163.0,
-          "roi": -60.594796
+          "counted": 6,
+          "stake": 319.0,
+          "profit": -213.0,
+          "roi": -66.77116
         },
         "cappers": {
           "Knottlast": {
@@ -691,17 +709,17 @@
           },
           "Niffler": {
             "total": 12,
-            "settled": 4,
-            "pending": 8,
+            "settled": 5,
+            "pending": 7,
             "win": 0,
-            "loss": 4,
+            "loss": 5,
             "push": 0,
             "half_win": 0,
             "half_loss": 0,
             "ew": 11,
-            "counted": 4,
-            "stake": 200.0,
-            "profit": -200.0,
+            "counted": 5,
+            "stake": 250.0,
+            "profit": -250.0,
             "roi": -100.0
           },
           "dacris69": {
@@ -768,17 +786,17 @@
         "sports": {
           "🐎 Перегони": {
             "total": 13,
-            "settled": 4,
-            "pending": 9,
+            "settled": 5,
+            "pending": 8,
             "win": 0,
-            "loss": 4,
+            "loss": 5,
             "push": 0,
             "half_win": 0,
             "half_loss": 0,
             "ew": 12,
-            "counted": 4,
-            "stake": 200.0,
-            "profit": -200.0,
+            "counted": 5,
+            "stake": 250.0,
+            "profit": -250.0,
             "roi": -100.0
           },
           "🎱 Снукер": {
@@ -847,18 +865,18 @@
         "label": "30 днів",
         "total": {
           "total": 14,
-          "settled": 5,
-          "pending": 9,
+          "settled": 6,
+          "pending": 8,
           "win": 1,
-          "loss": 4,
+          "loss": 5,
           "push": 0,
           "half_win": 0,
           "half_loss": 0,
           "ew": 12,
-          "counted": 5,
-          "stake": 269.0,
-          "profit": -163.0,
-          "roi": -60.594796
+          "counted": 6,
+          "stake": 319.0,
+          "profit": -213.0,
+          "roi": -66.77116
         },
         "cappers": {
           "Knottlast": {
@@ -878,17 +896,17 @@
           },
           "Niffler": {
             "total": 12,
-            "settled": 4,
-            "pending": 8,
+            "settled": 5,
+            "pending": 7,
             "win": 0,
-            "loss": 4,
+            "loss": 5,
             "push": 0,
             "half_win": 0,
             "half_loss": 0,
             "ew": 11,
-            "counted": 4,
-            "stake": 200.0,
-            "profit": -200.0,
+            "counted": 5,
+            "stake": 250.0,
+            "profit": -250.0,
             "roi": -100.0
           },
           "dacris69": {
@@ -955,17 +973,17 @@
         "sports": {
           "🐎 Перегони": {
             "total": 13,
-            "settled": 4,
-            "pending": 9,
+            "settled": 5,
+            "pending": 8,
             "win": 0,
-            "loss": 4,
+            "loss": 5,
             "push": 0,
             "half_win": 0,
             "half_loss": 0,
             "ew": 12,
-            "counted": 4,
-            "stake": 200.0,
-            "profit": -200.0,
+            "counted": 5,
+            "stake": 250.0,
+            "profit": -250.0,
             "roi": -100.0
           },
           "🎱 Снукер": {
@@ -1034,18 +1052,18 @@
         "label": "Весь час",
         "total": {
           "total": 14,
-          "settled": 5,
-          "pending": 9,
+          "settled": 6,
+          "pending": 8,
           "win": 1,
-          "loss": 4,
+          "loss": 5,
           "push": 0,
           "half_win": 0,
           "half_loss": 0,
           "ew": 12,
-          "counted": 5,
-          "stake": 269.0,
-          "profit": -163.0,
-          "roi": -60.594796
+          "counted": 6,
+          "stake": 319.0,
+          "profit": -213.0,
+          "roi": -66.77116
         },
         "cappers": {
           "Knottlast": {
@@ -1065,17 +1083,17 @@
           },
           "Niffler": {
             "total": 12,
-            "settled": 4,
-            "pending": 8,
+            "settled": 5,
+            "pending": 7,
             "win": 0,
-            "loss": 4,
+            "loss": 5,
             "push": 0,
             "half_win": 0,
             "half_loss": 0,
             "ew": 11,
-            "counted": 4,
-            "stake": 200.0,
-            "profit": -200.0,
+            "counted": 5,
+            "stake": 250.0,
+            "profit": -250.0,
             "roi": -100.0
           },
           "dacris69": {
@@ -1142,17 +1160,17 @@
         "sports": {
           "🐎 Перегони": {
             "total": 13,
-            "settled": 4,
-            "pending": 9,
+            "settled": 5,
+            "pending": 8,
             "win": 0,
-            "loss": 4,
+            "loss": 5,
             "push": 0,
             "half_win": 0,
             "half_loss": 0,
             "ew": 12,
-            "counted": 4,
-            "stake": 200.0,
-            "profit": -200.0,
+            "counted": 5,
+            "stake": 250.0,
+            "profit": -250.0,
             "roi": -100.0
           },
           "🎱 Снукер": {
@@ -1221,18 +1239,18 @@
         "label": "3 місяців",
         "total": {
           "total": 14,
-          "settled": 5,
-          "pending": 9,
+          "settled": 6,
+          "pending": 8,
           "win": 1,
-          "loss": 4,
+          "loss": 5,
           "push": 0,
           "half_win": 0,
           "half_loss": 0,
           "ew": 12,
-          "counted": 5,
-          "stake": 269.0,
-          "profit": -163.0,
-          "roi": -60.594796
+          "counted": 6,
+          "stake": 319.0,
+          "profit": -213.0,
+          "roi": -66.77116
         },
         "cappers": {
           "Knottlast": {
@@ -1252,17 +1270,17 @@
           },
           "Niffler": {
             "total": 12,
-            "settled": 4,
-            "pending": 8,
+            "settled": 5,
+            "pending": 7,
             "win": 0,
-            "loss": 4,
+            "loss": 5,
             "push": 0,
             "half_win": 0,
             "half_loss": 0,
             "ew": 11,
-            "counted": 4,
-            "stake": 200.0,
-            "profit": -200.0,
+            "counted": 5,
+            "stake": 250.0,
+            "profit": -250.0,
             "roi": -100.0
           },
           "dacris69": {
@@ -1329,17 +1347,17 @@
         "sports": {
           "🐎 Перегони": {
             "total": 13,
-            "settled": 4,
-            "pending": 9,
+            "settled": 5,
+            "pending": 8,
             "win": 0,
-            "loss": 4,
+            "loss": 5,
             "push": 0,
             "half_win": 0,
             "half_loss": 0,
             "ew": 12,
-            "counted": 4,
-            "stake": 200.0,
-            "profit": -200.0,
+            "counted": 5,
+            "stake": 250.0,
+            "profit": -250.0,
             "roi": -100.0
           },
           "🎱 Снукер": {
@@ -1408,18 +1426,18 @@
         "label": "6 місяців",
         "total": {
           "total": 14,
-          "settled": 5,
-          "pending": 9,
+          "settled": 6,
+          "pending": 8,
           "win": 1,
-          "loss": 4,
+          "loss": 5,
           "push": 0,
           "half_win": 0,
           "half_loss": 0,
           "ew": 12,
-          "counted": 5,
-          "stake": 269.0,
-          "profit": -163.0,
-          "roi": -60.594796
+          "counted": 6,
+          "stake": 319.0,
+          "profit": -213.0,
+          "roi": -66.77116
         },
         "cappers": {
           "Knottlast": {
@@ -1439,17 +1457,17 @@
           },
           "Niffler": {
             "total": 12,
-            "settled": 4,
-            "pending": 8,
+            "settled": 5,
+            "pending": 7,
             "win": 0,
-            "loss": 4,
+            "loss": 5,
             "push": 0,
             "half_win": 0,
             "half_loss": 0,
             "ew": 11,
-            "counted": 4,
-            "stake": 200.0,
-            "profit": -200.0,
+            "counted": 5,
+            "stake": 250.0,
+            "profit": -250.0,
             "roi": -100.0
           },
           "dacris69": {
@@ -1516,17 +1534,17 @@
         "sports": {
           "🐎 Перегони": {
             "total": 13,
-            "settled": 4,
-            "pending": 9,
+            "settled": 5,
+            "pending": 8,
             "win": 0,
-            "loss": 4,
+            "loss": 5,
             "push": 0,
             "half_win": 0,
             "half_loss": 0,
             "ew": 12,
-            "counted": 4,
-            "stake": 200.0,
-            "profit": -200.0,
+            "counted": 5,
+            "stake": 250.0,
+            "profit": -250.0,
             "roi": -100.0
           },
           "🎱 Снукер": {
@@ -1595,18 +1613,18 @@
         "label": "12 місяців",
         "total": {
           "total": 14,
-          "settled": 5,
-          "pending": 9,
+          "settled": 6,
+          "pending": 8,
           "win": 1,
-          "loss": 4,
+          "loss": 5,
           "push": 0,
           "half_win": 0,
           "half_loss": 0,
           "ew": 12,
-          "counted": 5,
-          "stake": 269.0,
-          "profit": -163.0,
-          "roi": -60.594796
+          "counted": 6,
+          "stake": 319.0,
+          "profit": -213.0,
+          "roi": -66.77116
         },
         "cappers": {
           "Knottlast": {
@@ -1626,17 +1644,17 @@
           },
           "Niffler": {
             "total": 12,
-            "settled": 4,
-            "pending": 8,
+            "settled": 5,
+            "pending": 7,
             "win": 0,
-            "loss": 4,
+            "loss": 5,
             "push": 0,
             "half_win": 0,
             "half_loss": 0,
             "ew": 11,
-            "counted": 4,
-            "stake": 200.0,
-            "profit": -200.0,
+            "counted": 5,
+            "stake": 250.0,
+            "profit": -250.0,
             "roi": -100.0
           },
           "dacris69": {
@@ -1703,17 +1721,17 @@
         "sports": {
           "🐎 Перегони": {
             "total": 13,
-            "settled": 4,
-            "pending": 9,
+            "settled": 5,
+            "pending": 8,
             "win": 0,
-            "loss": 4,
+            "loss": 5,
             "push": 0,
             "half_win": 0,
             "half_loss": 0,
             "ew": 12,
-            "counted": 4,
-            "stake": 200.0,
-            "profit": -200.0,
+            "counted": 5,
+            "stake": 250.0,
+            "profit": -250.0,
             "roi": -100.0
           },
           "🎱 Снукер": {
@@ -1784,18 +1802,18 @@
         "label": "2026-10",
         "total": {
           "total": 14,
-          "settled": 5,
-          "pending": 9,
+          "settled": 6,
+          "pending": 8,
           "win": 1,
-          "loss": 4,
+          "loss": 5,
           "push": 0,
           "half_win": 0,
           "half_loss": 0,
           "ew": 12,
-          "counted": 5,
-          "stake": 269.0,
-          "profit": -163.0,
-          "roi": -60.594796
+          "counted": 6,
+          "stake": 319.0,
+          "profit": -213.0,
+          "roi": -66.77116
         },
         "cappers": {
           "Knottlast": {
@@ -1815,17 +1833,17 @@
           },
           "Niffler": {
             "total": 12,
-            "settled": 4,
-            "pending": 8,
+            "settled": 5,
+            "pending": 7,
             "win": 0,
-            "loss": 4,
+            "loss": 5,
             "push": 0,
             "half_win": 0,
             "half_loss": 0,
             "ew": 11,
-            "counted": 4,
-            "stake": 200.0,
-            "profit": -200.0,
+            "counted": 5,
+            "stake": 250.0,
+            "profit": -250.0,
             "roi": -100.0
           },
           "dacris69": {
@@ -1892,17 +1910,17 @@
         "sports": {
           "🐎 Перегони": {
             "total": 13,
-            "settled": 4,
-            "pending": 9,
+            "settled": 5,
+            "pending": 8,
             "win": 0,
-            "loss": 4,
+            "loss": 5,
             "push": 0,
             "half_win": 0,
             "half_loss": 0,
             "ew": 12,
-            "counted": 4,
-            "stake": 200.0,
-            "profit": -200.0,
+            "counted": 5,
+            "stake": 250.0,
+            "profit": -250.0,
             "roi": -100.0
           },
           "🎱 Снукер": {
@@ -1973,7 +1991,6 @@
   "current_tip_ids": [
     "7759f681f7a5e4514a8ecac8143cab46795e3df6b3d5c61c016b98878c3be912",
     "d6c48fc0f7428239367491e9407dba02d60036656a0489fa8a1d65140b34842d",
-    "d4bf950dae8868d64e7c009282e108d31add221a54bee24ac4165c55b7323dc1",
     "05e4abc621610e6d1a72606e0b4fbff2997ecbf8a8d07330bd806c367e054691",
     "d44446f6397de1ccafb677b559a4c164955ca11745c687d731ca3f4e91b28c8b",
     "10981bebb5105f9517a6617f0ec11c23d77184d6833b4aa035be057cb4cf5c36",
