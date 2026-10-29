@@ -41,137 +41,262 @@ SPORTS = {
     "mojojak": "⛳ Гольф",
 }
 
+HORSES = {"Knottlast", "Niffler"}
+
 MARKETS = {
-    "Result",
-    "Full Time Result",
-    "Both Teams to Score",
-    "Total Goals",
-    "Correct Score",
-    "Asian Hcap",
-    "Result and BTTS",
-    "Total Corners",
-    "Total Cards",
-    "Half Time Result",
-    "Half Time/Full Time",
-    "Anytime Goalscorer",
-    "First Goalscorer",
-    "Match Winner",
-    "Winner",
-    "Outright Winner",
-    "Each Way",
-    "To Win",
+    "result",
+    "full time result",
+    "both teams to score",
+    "total goals",
+    "correct score",
+    "asian hcap",
+    "result and btts",
+    "total corners",
+    "total cards",
+    "half time result",
+    "half time/full time",
+    "anytime goalscorer",
+    "first goalscorer",
+    "match winner",
+    "winner",
+    "outright winner",
+    "each way",
+    "to win",
 }
 
-DATE = re.compile(r"^\d{1,2} [A-Za-z]+ 20\d{2}$")
+DATE = re.compile(
+    r"^\d{1,2}\s+[A-Za-z]+\s+20\d{2}$",
+    re.I,
+)
+
 FIXTURE = re.compile(
-    r"^(?:(\d{1,2}:\d{2})\s+)?(.+?)\s+v\s+(.+)$",
+    r"^(?:(\d{1,2}:\d{2})\s+)?"
+    r"(.+?)\s+(?:v|vs)\s+(.+)$",
     re.I,
 )
+
 RACE = re.compile(
-    r"^(\d{1,2}:\d{2})(?:\s+\d{1,2}:\d{2})?\s+(.+)$"
+    r"^(\d{1,2}:\d{2})"
+    r"(?:\s+\d{1,2}:\d{2})?"
+    r"\s+(.+)$"
 )
-ODDS = re.compile(
-    r"^(?:@\s*|odds\s*[: ]\s*)(\d+(?:[.,]\d+)?)$",
+
+STAKE = re.compile(
+    r"^(\d+(?:[.,]\d+)?)\s*"
+    r"(EW|E/W|EACH WAY|WIN)$",
     re.I,
 )
-STAKE = re.compile(r"^(\d+(?:\.\d+)?)\s*(EW|WIN)$", re.I)
+
+ODDS = re.compile(
+    r"^(?:@\s*|odds\s*[: ]\s*)"
+    r"(\d+(?:[.,]\d+)?(?:/\d+(?:[.,]\d+)?)?)$",
+    re.I,
+)
+
+STOP_PHRASES = (
+    "tips are normally settled",
+    "tips history",
+    "tip history",
+    "historical tips",
+)
+
+EMPTY_PHRASES = (
+    "has no current tips",
+    "no current tips",
+    "no tips currently",
+)
+
+INVALID_SELECTIONS = {
+    "view tip",
+    "view tips",
+    "read more",
+    "show more",
+    "place bet",
+    "bet now",
+    "share",
+    "login",
+    "sign up",
+}
 
 
 def now():
-    return datetime.now(KYIV).isoformat(timespec="seconds")
+    return datetime.now(KYIV).isoformat(
+        timespec="seconds"
+    )
 
 
-def digest(*args):
-    value = "|".join(map(str, args))
-    return hashlib.sha256(value.encode()).hexdigest()
+def digest(*values):
+    raw = "|".join(map(str, values))
+    return hashlib.sha256(
+        raw.encode("utf-8")
+    ).hexdigest()
 
 
 def load():
-    if STATE.exists():
-        obj = json.loads(STATE.read_text(encoding="utf-8"))
-        if not isinstance(obj, dict):
-            raise ValueError("State must be an object")
-        return obj
+    if not STATE.exists():
+        return {
+            "tips": {},
+            "sources": {},
+            "seen": [],
+            "schema": 2,
+        }
 
-    return {
-        "tips": {},
-        "sources": {},
-        "seen": [],
-        "schema": 2,
-    }
+    data = json.loads(
+        STATE.read_text(encoding="utf-8")
+    )
+
+    if not isinstance(data, dict):
+        raise ValueError(
+            "Invalid state: expected object"
+        )
+
+    if not isinstance(data.get("tips", {}), dict):
+        raise ValueError(
+            "Invalid state: tips"
+        )
+
+    if not isinstance(
+        data.get("sources", {}), dict
+    ):
+        raise ValueError(
+            "Invalid state: sources"
+        )
+
+    data.setdefault("tips", {})
+    data.setdefault("sources", {})
+    data.setdefault("seen", [])
+    data.setdefault("schema", 2)
+
+    return data
 
 
 def save(state):
-    STATE.parent.mkdir(exist_ok=True, parents=True)
+    STATE.parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    content = json.dumps(
+        state,
+        ensure_ascii=False,
+        indent=2,
+    ) + "\n"
+
+    if STATE.exists():
+        previous = STATE.read_text(
+            encoding="utf-8"
+        )
+
+        if previous == content:
+            return
 
     STATE.write_text(
-        json.dumps(state, ensure_ascii=False, indent=2) + "\n",
+        content,
         encoding="utf-8",
     )
 
-    subprocess.run(["git", "add", str(STATE)], check=True)
+    subprocess.run(
+        ["git", "add", str(STATE)],
+        check=True,
+    )
 
     changed = subprocess.run(
-        ["git", "diff", "--cached", "--quiet"]
+        ["git", "diff", "--cached", "--quiet"],
+        check=False,
     ).returncode
 
-    if changed:
-        subprocess.run(
-            [
-                "git",
-                "-c",
-                "user.name=github-actions[bot]",
-                "-c",
-                "user.email=41898282+github-actions[bot]@users.noreply.github.com",
-                "commit",
-                "-m",
-                "Update OLBG tips v2",
-            ],
-            check=True,
+    if changed == 0:
+        return
+
+    if changed != 1:
+        raise RuntimeError(
+            "Unable to inspect git changes"
         )
 
-        subprocess.run(
-            ["git", "pull", "--rebase", "origin", "main"],
-            check=True,
-        )
+    subprocess.run(
+        [
+            "git",
+            "-c",
+            "user.name=github-actions[bot]",
+            "-c",
+            "user.email="
+            "41898282+github-actions[bot]"
+            "@users.noreply.github.com",
+            "commit",
+            "-m",
+            "Update OLBG tips v2",
+        ],
+        check=True,
+    )
 
-        subprocess.run(
-            ["git", "push", "origin", "HEAD:main"],
-            check=True,
-        )
+    subprocess.run(
+        [
+            "git",
+            "pull",
+            "--rebase",
+            "origin",
+            "main",
+        ],
+        check=True,
+    )
+
+    subprocess.run(
+        [
+            "git",
+            "push",
+            "origin",
+            "HEAD:main",
+        ],
+        check=True,
+    )
 
 
 def telegram(message):
     token = os.environ["BOT_TOKEN"]
     chat = os.environ["CHAT_ID"]
 
-    data = urllib.parse.urlencode(
+    payload = urllib.parse.urlencode(
         {
             "chat_id": chat,
             "text": message[:4096],
             "disable_web_page_preview": "true",
         }
-    ).encode()
+    ).encode("utf-8")
 
     request = urllib.request.Request(
-        "https://api.telegram.org/bot" + token + "/sendMessage",
-        data=data,
+        "https://api.telegram.org/bot"
+        + token
+        + "/sendMessage",
+        data=payload,
     )
 
-    with urllib.request.urlopen(request, timeout=25) as response:
+    with urllib.request.urlopen(
+        request,
+        timeout=25,
+    ) as response:
         result = json.load(response)
 
     if not result.get("ok"):
-        raise RuntimeError("Telegram rejected message")
+        raise RuntimeError(
+            "Telegram rejected message"
+        )
 
 
 def body_from_html(html):
-    soup = BeautifulSoup(html, "html.parser")
+    soup = BeautifulSoup(
+        html,
+        "html.parser",
+    )
 
-    for node in soup(["script", "style", "noscript"]):
+    for node in soup(
+        ["script", "style", "noscript"]
+    ):
         node.decompose()
 
-    return soup.get_text("\n", strip=True)
+    return soup.get_text(
+        "\n",
+        strip=True,
+    )
 
 
 def get_body(browser, address):
@@ -180,29 +305,40 @@ def get_body(browser, address):
             address,
             headers={
                 "User-Agent": "Mozilla/5.0",
-                "Accept-Language": "en-GB,en;q=0.9",
+                "Accept-Language":
+                    "en-GB,en;q=0.9",
             },
         )
 
         with urllib.request.urlopen(
-            request, timeout=18
+            request,
+            timeout=18,
         ) as response:
-            body = body_from_html(
-                response.read(2500000).decode(
-                    "utf-8", "replace"
-                )
+            html = response.read(
+                2500000
+            ).decode(
+                "utf-8",
+                "replace",
             )
 
+        body = body_from_html(html)
+
         if len(body) > 100 and (
-            "has no current tips" in body.lower()
-            or "'s tips" in body.lower()
+            "'s tips" in body.lower()
+            or "current tips" in body.lower()
         ):
             return body
 
     except Exception as exc:
-        print("HTTP", type(exc).__name__, str(exc)[:100])
+        print(
+            "HTTP FALLBACK",
+            type(exc).__name__,
+            str(exc)[:100],
+        )
 
-    page = browser.new_page(locale="en-GB")
+    page = browser.new_page(
+        locale="en-GB"
+    )
 
     try:
         response = page.goto(
@@ -211,44 +347,181 @@ def get_body(browser, address):
             timeout=30000,
         )
 
-        if response and response.status >= 400:
-            raise ValueError("HTTP " + str(response.status))
+        if (
+            response is not None
+            and response.status >= 400
+        ):
+            raise ValueError(
+                "HTTP " + str(response.status)
+            )
 
         page.wait_for_timeout(2000)
 
-        return page.locator("body").inner_text()
+        return page.locator(
+            "body"
+        ).inner_text(
+            timeout=15000
+        )
 
     finally:
         page.close()
 
 
+def parse_odds(value):
+    match = ODDS.fullmatch(
+        value.strip()
+    )
+
+    if not match:
+        return None
+
+    raw = match.group(1).replace(
+        ",",
+        ".",
+    )
+
+    try:
+        if "/" in raw:
+            numerator, denominator = (
+                raw.split("/", 1)
+            )
+
+            if float(denominator) <= 0:
+                return None
+
+            number = (
+                1
+                + float(numerator)
+                / float(denominator)
+            )
+        else:
+            number = float(raw)
+
+        if 1.01 <= number <= 10000:
+            return round(number, 4)
+
+    except (ValueError, ZeroDivisionError):
+        pass
+
+    return None
+
+
+def nearby_odds(lines, index):
+    # Prefer odds immediately after
+    # the identified selection/market.
+    for value in lines[
+        index + 1:index + 6
+    ]:
+        number = parse_odds(value)
+
+        if number is not None:
+            return number
+
+        if (
+            DATE.fullmatch(value)
+            or FIXTURE.fullmatch(value)
+            or STAKE.fullmatch(value)
+        ):
+            break
+
+    return None
+
+
+def valid_selection(value):
+    value = value.strip()
+
+    return (
+        bool(value)
+        and len(value) <= 110
+        and value.casefold()
+        not in INVALID_SELECTIONS
+        and value.casefold()
+        not in MARKETS
+        and not DATE.fullmatch(value)
+        and not STAKE.fullmatch(value)
+        and not ODDS.fullmatch(value)
+    )
+
+
+def make_tip(
+    name,
+    day,
+    event,
+    time,
+    market,
+    selection,
+    odds,
+    stake=None,
+):
+    key = digest(
+        name,
+        day,
+        event,
+        market,
+        selection,
+    )
+
+    tip = {
+        "id": key,
+        "author": name,
+        "sport": SPORTS[name],
+        "date": day,
+        "time": time,
+        "event": event,
+        "market": market,
+        "selection": selection,
+        "odds_olbg": odds,
+        "odds_available": None,
+        "first_seen_at": now(),
+        "result": "pending",
+        "source": (
+            "https://www.olbg.com/"
+            "tipsters/tips/"
+            + PROFILES[name]
+        ),
+    }
+
+    if stake is not None:
+        tip["stake_points"] = stake
+
+    return tip
+
+
 def extract(name, body):
     lines = [
-        x.strip()
-        for x in body.splitlines()
-        if x.strip()
+        value.strip()
+        for value in body.splitlines()
+        if value.strip()
     ]
+
+    heading = name.casefold() + "'s tips"
 
     start = next(
         (
             i
-            for i, x in enumerate(lines)
-            if name.casefold() + "'s tips" in x.casefold()
-            and "history" not in x.casefold()
+            for i, value in enumerate(lines)
+            if heading in value.casefold()
+            and "history"
+            not in value.casefold()
         ),
         None,
     )
 
     if start is None:
-        raise ValueError("Current Tips section not found")
+        raise ValueError(
+            "Current Tips section not found"
+        )
 
     lines = lines[start + 1:]
 
     end = next(
         (
             i
-            for i, x in enumerate(lines)
-            if "tips are normally settled" in x.casefold()
+            for i, value in enumerate(lines)
+            if any(
+                phrase in value.casefold()
+                for phrase in STOP_PHRASES
+            )
         ),
         len(lines),
     )
@@ -256,250 +529,386 @@ def extract(name, body):
     lines = lines[:end]
 
     if any(
-        name.casefold() + " has no current tips"
-        in x.casefold()
-        for x in lines
+        phrase in value.casefold()
+        for value in lines
+        for phrase in EMPTY_PHRASES
     ):
         return []
 
     result = []
     day = None
     event = None
-    time = None
+    event_time = None
 
-    for i, x in enumerate(lines):
-        if DATE.fullmatch(x):
+    for i, value in enumerate(lines):
+        if DATE.fullmatch(value):
             try:
                 day = datetime.strptime(
-                    x, "%d %B %Y"
+                    value,
+                    "%d %B %Y",
                 ).date().isoformat()
+
             except ValueError:
                 day = None
 
             event = None
-            time = None
+            event_time = None
             continue
 
-        match = FIXTURE.fullmatch(x)
+        fixture = FIXTURE.fullmatch(
+            value
+        )
 
-        if day and match:
-            time = match[1]
-            event = match[2] + " v " + match[3]
+        if day and fixture:
+            event_time = fixture.group(1)
+            event = (
+                fixture.group(2).strip()
+                + " v "
+                + fixture.group(3).strip()
+            )
             continue
 
-        race = RACE.fullmatch(x)
+        if day and name in HORSES:
+            race = RACE.fullmatch(
+                value
+            )
 
-        if day and race and name in (
-            "Knottlast",
-            "Niffler",
-        ):
-            time = race[1]
-            event = race[2]
-            continue
+            if race:
+                event_time = race.group(1)
+                event = race.group(2)
+                continue
 
         if not day or not event:
             continue
 
-        if x in MARKETS and i > 0:
-            selection = lines[i - 1]
+        market = value.casefold()
 
-            if (
-                len(selection) > 110
-                or selection in MARKETS
-            ):
-                continue
-
-            nearby = lines[
-                max(0, i - 7):min(len(lines), i + 7)
-            ]
-
-            odd = next(
-                (
-                    float(o[1].replace(",", "."))
-                    for value in nearby
-                    if (o := ODDS.fullmatch(value))
-                ),
-                None,
-            )
-
-            if odd is not None and not (
-                1.01 <= odd <= 10000
-            ):
-                odd = None
-
-            key = digest(
-                name, day, event, x, selection
-            )
-
-            result.append(
-                {
-                    "id": key,
-                    "author": name,
-                    "sport": SPORTS[name],
-                    "date": day,
-                    "time": time,
-                    "event": event,
-                    "market": x,
-                    "selection": selection,
-                    "odds_olbg": odd,
-                    "odds_available": None,
-                    "first_seen_at": now(),
-                    "result": "pending",
-                    "source": (
-                        "https://www.olbg.com/tipsters/tips/"
-                        + PROFILES[name]
-                    ),
-                }
-            )
-
-        elif (
-            name in ("Knottlast", "Niffler")
-            and (stake := STAKE.fullmatch(x))
-            and i >= 1
+        if (
+            market in MARKETS
+            and i > 0
         ):
             selection = lines[i - 1]
 
-            if not selection or len(selection) > 100:
+            if not valid_selection(
+                selection
+            ):
                 continue
 
-            nearby = lines[i:min(len(lines), i + 7)]
-
-            odd = next(
-                (
-                    float(o[1].replace(",", "."))
-                    for value in nearby
-                    if (o := ODDS.fullmatch(value))
-                ),
-                None,
-            )
-
-            key = digest(
-                name,
-                day,
-                event,
-                selection,
-                stake[2],
+            odds = nearby_odds(
+                lines,
+                i,
             )
 
             result.append(
-                {
-                    "id": key,
-                    "author": name,
-                    "sport": SPORTS[name],
-                    "date": day,
-                    "time": time,
-                    "event": event,
-                    "market": stake[2].upper(),
-                    "selection": selection,
-                    "odds_olbg": odd,
-                    "odds_available": None,
-                    "first_seen_at": now(),
-                    "result": "pending",
-                    "source": (
-                        "https://www.olbg.com/tipsters/tips/"
-                        + PROFILES[name]
-                    ),
-                    "stake_points": float(stake[1]),
-                }
+                make_tip(
+                    name,
+                    day,
+                    event,
+                    event_time,
+                    value,
+                    selection,
+                    odds,
+                )
             )
 
-    if not result:
+            continue
+
+        if name in HORSES:
+            stake = STAKE.fullmatch(
+                value
+            )
+
+            if not stake or i < 1:
+                continue
+
+            selection = lines[i - 1]
+
+            if not valid_selection(
+                selection
+            ):
+                continue
+
+            stake_type = (
+                stake.group(2).upper()
+            )
+
+            if stake_type in (
+                "EW",
+                "E/W",
+                "EACH WAY",
+            ):
+                stake_type = "EW"
+
+            amount = float(
+                stake.group(1).replace(
+                    ",",
+                    ".",
+                )
+            )
+
+            odds = nearby_odds(
+                lines,
+                i,
+            )
+
+            result.append(
+                make_tip(
+                    name,
+                    day,
+                    event,
+                    event_time,
+                    stake_type,
+                    selection,
+                    odds,
+                    amount,
+                )
+            )
+
+    unique = {
+        tip["id"]: tip
+        for tip in result
+    }
+
+    if not unique:
         raise ValueError(
-            "Unverified page: no validated current tips"
+            "Page loaded but no validated "
+            "current tips or empty marker"
         )
 
-    return list(
-        {tip["id"]: tip for tip in result}.values()
-    )
+    return list(unique.values())
 
 
 def overlap(tip, items):
-    if tip["author"] not in (
-        "Knottlast",
-        "Niffler",
-    ):
+    if tip["author"] not in HORSES:
         return []
 
     return [
         other
         for other in items
-        if other["id"] != tip["id"]
-        and other["author"] in (
-            "Knottlast",
-            "Niffler",
+        if (
+            other["id"] != tip["id"]
+            and other["author"] in HORSES
+            and other["author"]
+            != tip["author"]
+            and other["date"]
+            == tip["date"]
+            and other["event"].casefold()
+            == tip["event"].casefold()
+            and other["selection"].casefold()
+            == tip["selection"].casefold()
         )
-        and other["author"] != tip["author"]
-        and other["date"] == tip["date"]
-        and other["event"].casefold()
-        == tip["event"].casefold()
-        and other["selection"].casefold()
-        == tip["selection"].casefold()
     ]
 
 
-def main():
-    state = load()
-    tips = state.setdefault("tips", {})
-    sources = state.setdefault("sources", {})
-
-    custom = json.loads(
-        os.environ.get("OLBG_TIPSTER_IDS", "{}")
-        or "{}"
+def format_message(tip, duplicates):
+    message = (
+        f"{tip['sport']} "
+        "НОВИЙ ПРОГНОЗ\n\n"
+        f"👤 Капер: {tip['author']}\n"
+        f"🏟 Подія: {tip['event']}\n"
+        f"📅 Дата: {tip['date']}\n"
     )
+
+    if tip.get("time"):
+        message += (
+            f"🕒 Час: {tip['time']}\n"
+        )
+
+    message += (
+        f"🎯 Прогноз: "
+        f"{tip['selection']}\n"
+        f"📌 Ринок: {tip['market']}\n"
+    )
+
+    if tip.get("stake_points") is not None:
+        message += (
+            "💵 Ставка OLBG: "
+            f"{tip['stake_points']} "
+            "points\n"
+        )
+
+    odds = tip.get("odds_olbg")
+
+    if odds is None:
+        message += (
+            "💰 Коефіцієнт: "
+            "не підтверджено\n"
+        )
+    else:
+        message += (
+            f"💰 Коефіцієнт OLBG: "
+            f"{odds:.2f}\n"
+        )
+
+    if duplicates:
+        names = ", ".join(
+            sorted(
+                {
+                    item["author"]
+                    for item in duplicates
+                }
+            )
+        )
+
+        message += (
+            "\n🐎 Збіг з капером: "
+            + names
+            + "\n"
+        )
+
+    message += (
+        "\n🔗 " + tip["source"]
+    )
+
+    return message
+
+
+def selftest():
+    football = (
+        "Geobetting's Tips\n"
+        "28 October 2026\n"
+        "17:00 Arsenal v Chelsea\n"
+        "Over 2.5\n"
+        "Total Goals\n"
+        "@1.85\n"
+        "Tips are normally settled"
+    )
+
+    horse = (
+        "Knottlast's Tips\n"
+        "28 October 2026\n"
+        "16:21 Pontefract\n"
+        "Mount King\n"
+        "25 EW\n"
+        "@11.00\n"
+        "Tips are normally settled"
+    )
+
+    empty = (
+        "Geobetting's Tips\n"
+        "Geobetting has no current tips\n"
+        "Tips are normally settled"
+    )
+
+    a = extract(
+        "Geobetting",
+        football,
+    )
+
+    b = extract(
+        "Knottlast",
+        horse,
+    )
+
+    c = extract(
+        "Geobetting",
+        empty,
+    )
+
+    assert len(a) == 1
+    assert a[0]["odds_olbg"] == 1.85
+
+    assert len(b) == 1
+    assert b[0]["market"] == "EW"
+    assert b[0]["stake_points"] == 25
+    assert b[0]["odds_olbg"] == 11.0
+
+    assert c == []
+
+    print("SELFTEST OK")
+
+
+def configure_profiles():
+    raw = os.environ.get(
+        "OLBG_TIPSTER_IDS",
+        "",
+    ).strip()
+
+    if not raw:
+        return
+
+    try:
+        custom = json.loads(raw)
+    except json.JSONDecodeError:
+        print(
+            "CONFIG ERROR: "
+            "OLBG_TIPSTER_IDS must be JSON"
+        )
+        return
+
+    if not isinstance(custom, dict):
+        print(
+            "CONFIG ERROR: "
+            "expected JSON object"
+        )
+        return
 
     for name, profile_id in custom.items():
         if (
             name in NAMES
             and re.fullmatch(
-                r"\d{1,12}", str(profile_id)
+                r"\d{1,12}",
+                str(profile_id),
             )
         ):
-            PROFILES[name] = str(profile_id)
+            PROFILES[name] = str(
+                profile_id
+            )
 
-    if os.environ.get("RUN_SELFTEST") == "1":
-        sample = (
-            "Geobetting's Tips\n"
-            "28 October 2026\n"
-            "17:00 A v B\n"
-            "Over 2.5\n"
-            "Total Goals\n"
-            "Tips are normally settled"
-        )
 
-        assert len(
-            extract("Geobetting", sample)
-        ) == 1
+def main():
+    configure_profiles()
 
-        print("SELFTEST OK")
+    if os.environ.get(
+        "RUN_SELFTEST"
+    ) == "1":
+        selftest()
         return
+
+    state = load()
+
+    tips = state["tips"]
+    sources = state["sources"]
 
     found = []
 
     with sync_playwright() as playwright:
-        browser = playwright.chromium.launch(
-            headless=True
+        browser = (
+            playwright.chromium.launch(
+                headless=True
+            )
         )
 
         try:
             for name in NAMES:
                 if name not in PROFILES:
                     sources[name] = {
-                        "status": "not_configured",
+                        "status":
+                            "not_configured",
                         "checked_at": now(),
                     }
 
-                    print("NOT CONFIGURED", name)
+                    print(
+                        "NOT CONFIGURED",
+                        name,
+                    )
                     continue
 
+                address = (
+                    "https://www.olbg.com/"
+                    "tipsters/tips/"
+                    + PROFILES[name]
+                )
+
                 try:
-                    address = (
-                        "https://www.olbg.com/tipsters/tips/"
-                        + PROFILES[name]
+                    body = get_body(
+                        browser,
+                        address,
                     )
 
                     batch = extract(
                         name,
-                        get_body(browser, address),
+                        body,
                     )
 
                     found.extend(batch)
@@ -532,52 +941,43 @@ def main():
         finally:
             browser.close()
 
-    allitems = list(tips.values()) + found
+    allitems = (
+        list(tips.values())
+        + found
+    )
+
+    sent = 0
 
     for tip in found:
-        if tip["id"] in tips:
+        key = tip["id"]
+
+        if key in tips:
             continue
 
-        duplicates = overlap(tip, allitems)
-
-        message = (
-            f"{tip['sport']} НОВИЙ ПРОГНОЗ\n"
-            f"👤 {tip['author']}\n"
-            f"🏟 {tip['event']}\n"
-            f"📅 {tip['date']} "
-            f"{tip.get('time') or ''}\n"
-            f"🎯 {tip['selection']} "
-            f"— {tip['market']}\n"
-            f"💰 Коеф. OLBG: "
-            f"{tip['odds_olbg'] if tip['odds_olbg'] is not None else 'не підтверджено'}"
+        duplicates = overlap(
+            tip,
+            allitems,
         )
 
-        if duplicates:
-            names = ", ".join(
-                sorted(
-                    {
-                        other["author"]
-                        for other in duplicates
-                    }
-                )
-            )
-
-            message += (
-                "\n🐎 ЗБІГ З ІНШИМ КАПЕРОМ: "
-                + names
-            )
-
-        message += "\n🔗 " + tip["source"]
+        message = format_message(
+            tip,
+            duplicates,
+        )
 
         telegram(message)
 
-        tips[tip["id"]] = tip
+        tips[key] = tip
+
+        # Save immediately after a
+        # successful Telegram message.
         save(state)
+
+        sent += 1
 
         print(
             "SENT",
             tip["author"],
-            tip["id"][:10],
+            key[:10],
         )
 
     save(state)
@@ -587,7 +987,9 @@ def main():
         len(found),
         "current parsed,",
         len(tips),
-        "total recorded",
+        "total recorded,",
+        sent,
+        "new alerts",
     )
 
 
