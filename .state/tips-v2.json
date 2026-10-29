@@ -547,21 +547,21 @@
   "result_checks": {
     "Knottlast": {
       "status": "verified",
-      "checked_at": "2026-10-29T14:01:03+02:00",
+      "checked_at": "2026-10-29T14:59:05+02:00",
       "matched": 0,
       "not_found": 1,
       "pages": 1
     },
     "Niffler": {
       "status": "verified",
-      "checked_at": "2026-10-29T14:01:03+02:00",
+      "checked_at": "2026-10-29T14:59:05+02:00",
       "matched": 0,
       "not_found": 12,
       "pages": 1
     },
     "risto123": {
       "status": "verified",
-      "checked_at": "2026-10-29T14:01:03+02:00",
+      "checked_at": "2026-10-29T14:59:05+02:00",
       "matched": 0,
       "not_found": 1,
       "pages": 1
@@ -570,7 +570,7 @@
   "monitoring_started_at": "2026-10-29T08:15:52+02:00",
   "reporting": {
     "schema": 1,
-    "generated_at": "2026-10-29T14:06:23+02:00",
+    "generated_at": "2026-10-29T14:59:05+02:00",
     "since": "2026-10-29T08:15:52+02:00",
     "periods": {
       "month": {
