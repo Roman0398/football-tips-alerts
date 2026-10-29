@@ -24,9 +24,11 @@
       "published_at": null,
       "stake_points": 25.0,
       "each_way_terms": null,
-      "alert_status": "sending",
+      "alert_status": "sent",
       "last_seen_at": "2026-10-29T08:15:56+02:00",
-      "alert_attempt_at": "2026-10-29T08:15:57+02:00"
+      "alert_attempt_at": "2026-10-29T08:15:57+02:00",
+      "alert_sent_at": "2026-10-29T08:15:59+02:00",
+      "telegram_message_id": 15
     }
   },
   "sources": {
@@ -109,6 +111,8 @@
       "transport": "HTTP"
     }
   },
-  "seen": [],
+  "seen": [
+    "7759f681f7a5e4514a8ecac8143cab46795e3df6b3d5c61c016b98878c3be912"
+  ],
   "schema": 2
 }
