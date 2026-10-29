@@ -2,30 +2,30 @@
   "tips": {},
   "sources": {
     "Knottlast": {
-      "status": "verified",
-      "count": 0,
-      "checked_at": "2026-10-29T06:45:45+02:00"
+      "status": "unverified",
+      "checked_at": "2026-10-29T06:59:47+02:00",
+      "details": "Unverified page: no validated current tips"
     },
     "Niffler": {
       "status": "not_configured",
-      "checked_at": "2026-10-29T06:45:45+02:00"
+      "checked_at": "2026-10-29T06:59:47+02:00"
     },
     "dacris69": {
       "status": "not_configured",
-      "checked_at": "2026-10-29T06:45:45+02:00"
+      "checked_at": "2026-10-29T06:59:47+02:00"
     },
     "risto123": {
       "status": "not_configured",
-      "checked_at": "2026-10-29T06:45:45+02:00"
+      "checked_at": "2026-10-29T06:59:47+02:00"
     },
     "Geobetting": {
       "status": "verified",
       "count": 0,
-      "checked_at": "2026-10-29T06:45:46+02:00"
+      "checked_at": "2026-10-29T06:59:48+02:00"
     },
     "mojojak": {
       "status": "not_configured",
-      "checked_at": "2026-10-29T06:45:46+02:00"
+      "checked_at": "2026-10-29T06:59:48+02:00"
     }
   },
   "seen": [],
