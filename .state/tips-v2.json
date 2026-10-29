@@ -577,8 +577,9 @@
       "published_at": null,
       "stake_points": 25.0,
       "each_way_terms": null,
-      "alert_status": "pending",
-      "last_seen_at": "2026-10-29T18:33:14+02:00"
+      "alert_status": "sending",
+      "last_seen_at": "2026-10-29T18:33:14+02:00",
+      "alert_attempt_at": "2026-10-29T18:33:16+02:00"
     },
     "51c06af6a44d642579695181a84bde214d50c4748a7aa403b5474217cc82f3d8": {
       "id": "51c06af6a44d642579695181a84bde214d50c4748a7aa403b5474217cc82f3d8",
