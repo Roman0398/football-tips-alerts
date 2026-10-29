@@ -2,6 +2,8 @@
 name: OLBG Six Tipsters Monitor v2
 
 on:
+  schedule:
+    - cron: '*/5 * * * *'
   workflow_dispatch:
 
 permissions:
@@ -31,7 +33,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install beautifulsoup4 playwright
-          python -m playwright install --with-deps chromium
+          python -m playwright install chromium
 
       - name: Monitor current OLBG tips
         env:
