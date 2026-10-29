@@ -407,8 +407,6 @@ def parse_odds(value):
 
 
 def nearby_odds(lines, index):
-    # Prefer odds immediately after
-    # the identified selection/market.
     for value in lines[
         index + 1:index + 6
     ]:
@@ -763,6 +761,61 @@ def format_message(tip, duplicates):
     return message
 
 
+def diagnostics(name, body):
+    # Public OLBG page text only.
+    # Never print environment variables,
+    # bot tokens, chat IDs or cookies.
+    print()
+    print(
+        "========== OLBG DIAGNOSTICS =========="
+    )
+    print("TIPSTER:", name)
+    print("BODY LENGTH:", len(body))
+
+    lines = [
+        line.strip()
+        for line in body.splitlines()
+        if line.strip()
+    ]
+
+    print("TOTAL LINES:", len(lines))
+
+    heading = name.casefold() + "'s tips"
+
+    starts = [
+        i
+        for i, line in enumerate(lines)
+        if heading in line.casefold()
+    ]
+
+    print("HEADING POSITIONS:", starts[:10])
+
+    if starts:
+        start = starts[0]
+    else:
+        start = 0
+
+    end = min(
+        len(lines),
+        start + 100,
+    )
+
+    print("DIAGNOSTIC TEXT START")
+
+    for i in range(start, end):
+        line = lines[i][:250]
+
+        print(
+            f"LINE {i:04d}: {line}"
+        )
+
+    print("DIAGNOSTIC TEXT END")
+    print(
+        "========== END DIAGNOSTICS =========="
+    )
+    print()
+
+
 def selftest():
     football = (
         "Geobetting's Tips\n"
@@ -900,6 +953,8 @@ def main():
                     + PROFILES[name]
                 )
 
+                body = None
+
                 try:
                     body = get_body(
                         browser,
@@ -938,6 +993,17 @@ def main():
                         str(exc)[:140],
                     )
 
+                    # Temporary diagnostic mode.
+                    # Only for Knottlast.
+                    if (
+                        name == "Knottlast"
+                        and body is not None
+                    ):
+                        diagnostics(
+                            name,
+                            body,
+                        )
+
         finally:
             browser.close()
 
@@ -968,8 +1034,6 @@ def main():
 
         tips[key] = tip
 
-        # Save immediately after a
-        # successful Telegram message.
         save(state)
 
         sent += 1
