@@ -1896,5 +1896,10 @@
     "8046be1c903468cbd6b3ddfd0a65798943a99e6bad0046e2770f56f34158b577",
     "cc115d5d340f0096728c224a1fcbeb6496592a2c9afcc399f3dccca039bd26d2",
     "4e658f0176e3fd53151e17c1514a2413dc40587d918a566819a398a6106bb083"
-  ]
+  ],
+  "monthly_reports": {
+    "2026-09": {
+      "status": "no_coverage"
+    }
+  }
 }
