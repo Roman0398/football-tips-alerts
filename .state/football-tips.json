@@ -43,13 +43,13 @@
   "source_status": {
     "Geobetting": {
       "status": "✅ 0 поточних",
-      "checked_at": "29.10.2026 03:44",
-      "details": "http; "
+      "checked_at": "29.10.2026 03:49",
+      "details": "Current Tips checked"
     },
     "tipstonga": {
       "status": "⚠️ Не підтверджено",
-      "checked_at": "29.10.2026 03:44",
-      "details": "Current tips unverified; /tipsters/tips/13000 http: Current Tips not verified: neither explicit empty nor parsed tips; /tipsters/tips/13000 browser: Current Tips not verified: neither explicit empty nor parsed tips"
+      "checked_at": "29.10.2026 03:49",
+      "details": "Page loaded but tips not verified"
     }
   }
 }
