@@ -3,29 +3,29 @@
   "sources": {
     "Knottlast": {
       "status": "unverified",
-      "checked_at": "2026-10-29T07:34:11+02:00",
+      "checked_at": "2026-10-29T08:12:25+02:00",
       "details": "Page loaded but no validated current tips or empty marker"
     },
     "Niffler": {
       "status": "not_configured",
-      "checked_at": "2026-10-29T07:34:11+02:00"
+      "checked_at": "2026-10-29T08:12:25+02:00"
     },
     "dacris69": {
       "status": "not_configured",
-      "checked_at": "2026-10-29T07:34:11+02:00"
+      "checked_at": "2026-10-29T08:12:25+02:00"
     },
     "risto123": {
       "status": "not_configured",
-      "checked_at": "2026-10-29T07:34:11+02:00"
+      "checked_at": "2026-10-29T08:12:25+02:00"
     },
     "Geobetting": {
       "status": "verified",
       "count": 0,
-      "checked_at": "2026-10-29T07:34:12+02:00"
+      "checked_at": "2026-10-29T08:12:25+02:00"
     },
     "mojojak": {
       "status": "not_configured",
-      "checked_at": "2026-10-29T07:34:12+02:00"
+      "checked_at": "2026-10-29T08:12:25+02:00"
     }
   },
   "seen": [],
