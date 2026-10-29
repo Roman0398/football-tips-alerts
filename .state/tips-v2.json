@@ -1,31 +1,111 @@
 {
-  "tips": {},
+  "tips": {
+    "7759f681f7a5e4514a8ecac8143cab46795e3df6b3d5c61c016b98878c3be912": {
+      "id": "7759f681f7a5e4514a8ecac8143cab46795e3df6b3d5c61c016b98878c3be912",
+      "author": "Knottlast",
+      "sport": "🐎 Перегони",
+      "date": "2026-10-29",
+      "time": "18:30",
+      "event": "Southwell",
+      "market": "EW",
+      "selection": "Mickey Mongoose",
+      "odds_olbg": 15.0,
+      "odds_available": null,
+      "first_seen_at": "2026-10-29T08:15:52+02:00",
+      "result": "pending",
+      "source": "https://www.olbg.com/tipsters/tips/666034",
+      "source_tip_id": "296257686",
+      "source_event_id": "203617064",
+      "source_sport_id": 2,
+      "market_olbg": "Daily Racing",
+      "bet_type": "EW",
+      "event_datetime_olbg": "2026-10-29 18:30:00",
+      "handicap_olbg": "",
+      "published_at": null,
+      "stake_points": 25.0,
+      "each_way_terms": null,
+      "alert_status": "pending",
+      "last_seen_at": "2026-10-29T08:15:56+02:00"
+    }
+  },
   "sources": {
     "Knottlast": {
-      "status": "unverified",
-      "checked_at": "2026-10-29T08:12:25+02:00",
-      "details": "Page loaded but no validated current tips or empty marker"
+      "checked_at": "2026-10-29T08:15:51+02:00",
+      "url": "https://www.olbg.com/tipsters/tips/666034",
+      "profile_id": "666034",
+      "status": "verified",
+      "count": 1,
+      "last_success_at": "2026-10-29T08:15:52+02:00",
+      "all_sports_count": 1,
+      "filtered_out": 0,
+      "pages": 1,
+      "proof": "embedded current-tip data",
+      "transport": "HTTP"
     },
     "Niffler": {
-      "status": "not_configured",
-      "checked_at": "2026-10-29T08:12:25+02:00"
-    },
-    "dacris69": {
-      "status": "not_configured",
-      "checked_at": "2026-10-29T08:12:25+02:00"
-    },
-    "risto123": {
-      "status": "not_configured",
-      "checked_at": "2026-10-29T08:12:25+02:00"
-    },
-    "Geobetting": {
+      "checked_at": "2026-10-29T08:15:52+02:00",
+      "url": "https://www.olbg.com/tipsters/tips/638883",
+      "profile_id": "638883",
       "status": "verified",
       "count": 0,
-      "checked_at": "2026-10-29T08:12:25+02:00"
+      "last_success_at": "2026-10-29T08:15:52+02:00",
+      "all_sports_count": 3,
+      "filtered_out": 3,
+      "pages": 1,
+      "proof": "embedded current-tip data",
+      "transport": "HTTP"
+    },
+    "dacris69": {
+      "checked_at": "2026-10-29T08:15:52+02:00",
+      "url": "https://www.olbg.com/tipsters/tips/480440",
+      "profile_id": "480440",
+      "status": "verified",
+      "count": 0,
+      "last_success_at": "2026-10-29T08:15:53+02:00",
+      "all_sports_count": 19,
+      "filtered_out": 19,
+      "pages": 1,
+      "proof": "embedded current-tip data",
+      "transport": "HTTP"
+    },
+    "risto123": {
+      "checked_at": "2026-10-29T08:15:53+02:00",
+      "url": "https://www.olbg.com/tipsters/tips/411789",
+      "profile_id": "411789",
+      "status": "verified",
+      "count": 0,
+      "last_success_at": "2026-10-29T08:15:54+02:00",
+      "all_sports_count": 16,
+      "filtered_out": 16,
+      "pages": 1,
+      "proof": "embedded current-tip data",
+      "transport": "HTTP"
+    },
+    "Geobetting": {
+      "checked_at": "2026-10-29T08:15:54+02:00",
+      "url": "https://www.olbg.com/tipsters/tips/420769",
+      "profile_id": "420769",
+      "status": "verified",
+      "count": 0,
+      "last_success_at": "2026-10-29T08:15:55+02:00",
+      "all_sports_count": 0,
+      "filtered_out": 0,
+      "pages": 1,
+      "proof": "embedded hasTips=false and empty tipsByDate",
+      "transport": "HTTP"
     },
     "mojojak": {
-      "status": "not_configured",
-      "checked_at": "2026-10-29T08:12:25+02:00"
+      "checked_at": "2026-10-29T08:15:55+02:00",
+      "url": "https://www.olbg.com/tipsters/tips/126921",
+      "profile_id": "126921",
+      "status": "verified",
+      "count": 0,
+      "last_success_at": "2026-10-29T08:15:56+02:00",
+      "all_sports_count": 0,
+      "filtered_out": 0,
+      "pages": 1,
+      "proof": "embedded hasTips=false and empty tipsByDate",
+      "transport": "HTTP"
     }
   },
   "seen": [],
