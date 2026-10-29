@@ -1,4 +1,3 @@
-
 name: OLBG Six Tipsters Monitor v2
 
 on:
@@ -33,11 +32,11 @@ jobs:
       - name: Install dependencies
         run: |
           pip install beautifulsoup4 playwright
-          python -m playwright install chromium
+          python -m playwright install --with-deps chromium
 
-      - name: Monitor current OLBG tips
+      - name: Monitor tips, verify OLBG results and update statistics
         env:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           CHAT_ID: ${{ secrets.CHAT_ID }}
           OLBG_TIPSTER_IDS: ${{ vars.OLBG_TIPSTER_IDS }}
-        run: python -u scripts/monitor.py
+        run: python -u scripts/complete.py
