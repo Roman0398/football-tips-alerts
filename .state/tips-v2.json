@@ -65,7 +65,7 @@
       "result_olbg": "Win",
       "settlement_verified": true,
       "settled_at": "2026-10-29T15:58:28+02:00",
-      "settlement_checked_at": "2026-10-29T16:52:38+02:00",
+      "settlement_checked_at": "2026-10-29T17:39:50+02:00",
       "result_source": "https://www.olbg.com/tipsters/tips/history/411789",
       "stake_total_points": 69.0,
       "profit_points": 37.0,
@@ -146,7 +146,7 @@
       "result_olbg": "Lose",
       "settlement_verified": true,
       "settled_at": "2026-10-29T15:58:27+02:00",
-      "settlement_checked_at": "2026-10-29T16:52:37+02:00",
+      "settlement_checked_at": "2026-10-29T17:39:48+02:00",
       "result_source": "https://www.olbg.com/tipsters/tips/history/638883",
       "stake_total_points": 50.0,
       "profit_points": -50.0,
@@ -196,7 +196,7 @@
       "result_olbg": "Lose",
       "settlement_verified": true,
       "settled_at": "2026-10-29T15:58:27+02:00",
-      "settlement_checked_at": "2026-10-29T16:52:37+02:00",
+      "settlement_checked_at": "2026-10-29T17:39:48+02:00",
       "result_source": "https://www.olbg.com/tipsters/tips/history/638883",
       "stake_total_points": 50.0,
       "profit_points": -50.0,
@@ -246,7 +246,7 @@
       "result_olbg": "Lose",
       "settlement_verified": true,
       "settled_at": "2026-10-29T15:58:27+02:00",
-      "settlement_checked_at": "2026-10-29T16:52:37+02:00",
+      "settlement_checked_at": "2026-10-29T17:39:48+02:00",
       "result_source": "https://www.olbg.com/tipsters/tips/history/638883",
       "stake_total_points": 50.0,
       "profit_points": -50.0,
@@ -296,7 +296,7 @@
       "result_olbg": "Lose",
       "settlement_verified": true,
       "settled_at": "2026-10-29T16:52:37+02:00",
-      "settlement_checked_at": "2026-10-29T16:52:37+02:00",
+      "settlement_checked_at": "2026-10-29T17:39:48+02:00",
       "result_source": "https://www.olbg.com/tipsters/tips/history/638883",
       "stake_total_points": 50.0,
       "profit_points": -50.0,
@@ -474,7 +474,7 @@
       "result_olbg": "Lose",
       "settlement_verified": true,
       "settled_at": "2026-10-29T15:58:27+02:00",
-      "settlement_checked_at": "2026-10-29T16:52:37+02:00",
+      "settlement_checked_at": "2026-10-29T17:39:48+02:00",
       "result_source": "https://www.olbg.com/tipsters/tips/history/638883",
       "stake_total_points": 50.0,
       "profit_points": -50.0,
@@ -648,21 +648,21 @@
   "result_checks": {
     "Knottlast": {
       "status": "verified",
-      "checked_at": "2026-10-29T16:52:34+02:00",
+      "checked_at": "2026-10-29T17:39:45+02:00",
       "matched": 0,
       "not_found": 1,
       "pages": 1
     },
     "Niffler": {
       "status": "verified",
-      "checked_at": "2026-10-29T16:52:34+02:00",
+      "checked_at": "2026-10-29T17:39:45+02:00",
       "matched": 5,
       "not_found": 7,
       "pages": 1
     },
     "risto123": {
       "status": "verified",
-      "checked_at": "2026-10-29T16:52:34+02:00",
+      "checked_at": "2026-10-29T17:39:45+02:00",
       "matched": 1,
       "not_found": 0,
       "pages": 1
@@ -671,7 +671,7 @@
   "monitoring_started_at": "2026-10-29T08:15:52+02:00",
   "reporting": {
     "schema": 1,
-    "generated_at": "2026-10-29T16:52:34+02:00",
+    "generated_at": "2026-10-29T17:39:45+02:00",
     "since": "2026-10-29T08:15:52+02:00",
     "periods": {
       "month": {
