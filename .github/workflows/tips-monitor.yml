@@ -1,0 +1,41 @@
+
+name: OLBG Six Tipsters Monitor v2
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: olbg-monitor-v2
+  cancel-in-progress: false
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          pip install beautifulsoup4 playwright
+          python -m playwright install --with-deps chromium
+
+      - name: Monitor current OLBG tips
+        env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          CHAT_ID: ${{ secrets.CHAT_ID }}
+          OLBG_TIPSTER_IDS: ${{ vars.OLBG_TIPSTER_IDS }}
+        run: python -u scripts/monitor.py
