@@ -3552,6 +3552,10 @@
   "monthly_reports": {
     "2026-09": {
       "status": "no_coverage"
+    },
+    "2026-10": {
+      "status": "sending",
+      "attempt_at": "2026-11-01T10:26:27+02:00"
     }
   }
 }
