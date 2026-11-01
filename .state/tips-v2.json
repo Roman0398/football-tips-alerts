@@ -3554,8 +3554,10 @@
       "status": "no_coverage"
     },
     "2026-10": {
-      "status": "sending",
-      "attempt_at": "2026-11-01T10:26:27+02:00"
+      "status": "sent",
+      "attempt_at": "2026-11-01T10:26:27+02:00",
+      "sent_at": "2026-11-01T10:26:29+02:00",
+      "telegram_message_id": 63
     }
   }
 }
