@@ -4580,8 +4580,9 @@
       "published_at": null,
       "stake_points": 25.0,
       "each_way_terms": null,
-      "alert_status": "pending",
-      "last_seen_at": "2026-11-04T12:50:31+02:00"
+      "alert_status": "sending",
+      "last_seen_at": "2026-11-04T12:50:31+02:00",
+      "alert_attempt_at": "2026-11-04T12:50:37+02:00"
     },
     "be55060614f189167748e7990a2c59ea1ddfdc20d88b4fe3c089b3eba1067b16": {
       "id": "be55060614f189167748e7990a2c59ea1ddfdc20d88b4fe3c089b3eba1067b16",
