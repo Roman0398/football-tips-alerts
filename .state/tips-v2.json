@@ -5308,8 +5308,9 @@
       "handicap_olbg": "",
       "published_at": null,
       "stake_points": 50.0,
-      "alert_status": "pending",
-      "last_seen_at": "2026-11-05T13:26:03+02:00"
+      "alert_status": "sending",
+      "last_seen_at": "2026-11-05T13:26:03+02:00",
+      "alert_attempt_at": "2026-11-05T13:26:21+02:00"
     },
     "ff30abe7675767a915aa70d4a00c28448b54c5cee71a2386b3bc96cc08ffdbbf": {
       "id": "ff30abe7675767a915aa70d4a00c28448b54c5cee71a2386b3bc96cc08ffdbbf",
