@@ -7760,8 +7760,9 @@
       "published_at": null,
       "stake_points": 25.0,
       "each_way_terms": null,
-      "alert_status": "pending",
-      "last_seen_at": "2026-11-06T23:53:37+02:00"
+      "alert_status": "sending",
+      "last_seen_at": "2026-11-06T23:53:37+02:00",
+      "alert_attempt_at": "2026-11-06T23:53:41+02:00"
     }
   },
   "sources": {
