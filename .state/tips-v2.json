@@ -8842,10 +8842,12 @@
       "published_at": null,
       "stake_points": 50.0,
       "alert_status": "sent",
-      "last_seen_at": "2026-11-09T13:16:08+02:00",
+      "last_seen_at": "2026-11-09T14:14:02+02:00",
       "alert_attempt_at": "2026-11-09T13:16:10+02:00",
       "alert_sent_at": "2026-11-09T13:16:11+02:00",
-      "telegram_message_id": 206
+      "telegram_message_id": 206,
+      "odds_olbg_latest": 2.2,
+      "odds_olbg_latest_at": "2026-11-09T14:14:02+02:00"
     },
     "0aca1a4766c73471e5308e983165b6a6085e9cf25745c7b072c0bbb9c15a9937": {
       "id": "0aca1a4766c73471e5308e983165b6a6085e9cf25745c7b072c0bbb9c15a9937",
@@ -8871,10 +8873,12 @@
       "published_at": null,
       "stake_points": 50.0,
       "alert_status": "sent",
-      "last_seen_at": "2026-11-09T13:16:08+02:00",
+      "last_seen_at": "2026-11-09T14:14:02+02:00",
       "alert_attempt_at": "2026-11-09T13:16:13+02:00",
       "alert_sent_at": "2026-11-09T13:16:15+02:00",
-      "telegram_message_id": 207
+      "telegram_message_id": 207,
+      "odds_olbg_latest": 5.0,
+      "odds_olbg_latest_at": "2026-11-09T14:14:02+02:00"
     },
     "7d9f5806842e1e67c655d5baabb20dd17278aec0961f9ed92d4d1ae8284c8a1f": {
       "id": "7d9f5806842e1e67c655d5baabb20dd17278aec0961f9ed92d4d1ae8284c8a1f",
@@ -8900,10 +8904,12 @@
       "published_at": null,
       "stake_points": 50.0,
       "alert_status": "sent",
-      "last_seen_at": "2026-11-09T13:16:08+02:00",
+      "last_seen_at": "2026-11-09T14:14:02+02:00",
       "alert_attempt_at": "2026-11-09T13:16:17+02:00",
       "alert_sent_at": "2026-11-09T13:16:19+02:00",
-      "telegram_message_id": 208
+      "telegram_message_id": 208,
+      "odds_olbg_latest": 4.0,
+      "odds_olbg_latest_at": "2026-11-09T14:14:02+02:00"
     },
     "8aec5db8a868bb4ef7ab3e7356091e78c6274715e4bb79eca24cf736c0abe0a9": {
       "id": "8aec5db8a868bb4ef7ab3e7356091e78c6274715e4bb79eca24cf736c0abe0a9",
@@ -8929,10 +8935,12 @@
       "published_at": null,
       "stake_points": 50.0,
       "alert_status": "sent",
-      "last_seen_at": "2026-11-09T13:16:08+02:00",
+      "last_seen_at": "2026-11-09T14:14:02+02:00",
       "alert_attempt_at": "2026-11-09T13:16:20+02:00",
       "alert_sent_at": "2026-11-09T13:16:22+02:00",
-      "telegram_message_id": 209
+      "telegram_message_id": 209,
+      "odds_olbg_latest": 3.13,
+      "odds_olbg_latest_at": "2026-11-09T14:14:02+02:00"
     },
     "8146602837eb62733e994625c745a12718cd10cef6f6b66c7e6bcc2662a8c4d2": {
       "id": "8146602837eb62733e994625c745a12718cd10cef6f6b66c7e6bcc2662a8c4d2",
@@ -8959,10 +8967,12 @@
       "stake_points": 25.0,
       "each_way_terms": null,
       "alert_status": "sent",
-      "last_seen_at": "2026-11-09T13:16:08+02:00",
+      "last_seen_at": "2026-11-09T14:14:02+02:00",
       "alert_attempt_at": "2026-11-09T13:16:24+02:00",
       "alert_sent_at": "2026-11-09T13:16:26+02:00",
-      "telegram_message_id": 210
+      "telegram_message_id": 210,
+      "odds_olbg_latest": 41.0,
+      "odds_olbg_latest_at": "2026-11-09T14:14:02+02:00"
     },
     "5b82a435364d8fb046dae766bdd44850c8ef0fc19c74a167a432245e4507fe37": {
       "id": "5b82a435364d8fb046dae766bdd44850c8ef0fc19c74a167a432245e4507fe37",
@@ -8989,10 +8999,12 @@
       "stake_points": 25.0,
       "each_way_terms": null,
       "alert_status": "sent",
-      "last_seen_at": "2026-11-09T13:16:08+02:00",
+      "last_seen_at": "2026-11-09T14:14:02+02:00",
       "alert_attempt_at": "2026-11-09T13:16:27+02:00",
       "alert_sent_at": "2026-11-09T13:16:29+02:00",
-      "telegram_message_id": 211
+      "telegram_message_id": 211,
+      "odds_olbg_latest": 11.0,
+      "odds_olbg_latest_at": "2026-11-09T14:14:02+02:00"
     },
     "e9102e86e28138ab73e3c29869de3b57333857a154a2764c078dbae6283f3780": {
       "id": "e9102e86e28138ab73e3c29869de3b57333857a154a2764c078dbae6283f3780",
@@ -9019,10 +9031,12 @@
       "stake_points": 25.0,
       "each_way_terms": null,
       "alert_status": "sent",
-      "last_seen_at": "2026-11-09T13:16:08+02:00",
+      "last_seen_at": "2026-11-09T14:14:02+02:00",
       "alert_attempt_at": "2026-11-09T13:16:30+02:00",
       "alert_sent_at": "2026-11-09T13:16:32+02:00",
-      "telegram_message_id": 212
+      "telegram_message_id": 212,
+      "odds_olbg_latest": 29.0,
+      "odds_olbg_latest_at": "2026-11-09T14:14:02+02:00"
     },
     "149f24ba9e3a67c564b300c2bde58f23a67e188b8edab64ca59d305e89642190": {
       "id": "149f24ba9e3a67c564b300c2bde58f23a67e188b8edab64ca59d305e89642190",
@@ -9049,20 +9063,22 @@
       "stake_points": 25.0,
       "each_way_terms": null,
       "alert_status": "sent",
-      "last_seen_at": "2026-11-09T13:16:08+02:00",
+      "last_seen_at": "2026-11-09T14:14:02+02:00",
       "alert_attempt_at": "2026-11-09T13:16:34+02:00",
       "alert_sent_at": "2026-11-09T13:16:36+02:00",
-      "telegram_message_id": 213
+      "telegram_message_id": 213,
+      "odds_olbg_latest": 13.0,
+      "odds_olbg_latest_at": "2026-11-09T14:14:02+02:00"
     }
   },
   "sources": {
     "Knottlast": {
-      "checked_at": "2026-11-09T13:16:03+02:00",
+      "checked_at": "2026-11-09T14:13:57+02:00",
       "url": "https://www.olbg.com/tipsters/tips/666034",
       "profile_id": "666034",
       "status": "verified",
       "count": 0,
-      "last_success_at": "2026-11-09T13:16:04+02:00",
+      "last_success_at": "2026-11-09T14:13:58+02:00",
       "all_sports_count": 0,
       "filtered_out": 0,
       "pages": 1,
@@ -9070,12 +9086,12 @@
       "transport": "HTTP"
     },
     "Niffler": {
-      "checked_at": "2026-11-09T13:16:04+02:00",
+      "checked_at": "2026-11-09T14:13:58+02:00",
       "url": "https://www.olbg.com/tipsters/tips/638883",
       "profile_id": "638883",
       "status": "verified",
       "count": 8,
-      "last_success_at": "2026-11-09T13:16:05+02:00",
+      "last_success_at": "2026-11-09T14:13:58+02:00",
       "all_sports_count": 11,
       "filtered_out": 3,
       "pages": 1,
@@ -9083,12 +9099,12 @@
       "transport": "HTTP"
     },
     "dacris69": {
-      "checked_at": "2026-11-09T13:16:05+02:00",
+      "checked_at": "2026-11-09T14:13:58+02:00",
       "url": "https://www.olbg.com/tipsters/tips/480440",
       "profile_id": "480440",
       "status": "verified",
       "count": 0,
-      "last_success_at": "2026-11-09T13:16:06+02:00",
+      "last_success_at": "2026-11-09T14:13:59+02:00",
       "all_sports_count": 15,
       "filtered_out": 15,
       "pages": 1,
@@ -9096,12 +9112,12 @@
       "transport": "HTTP"
     },
     "risto123": {
-      "checked_at": "2026-11-09T13:16:06+02:00",
+      "checked_at": "2026-11-09T14:13:59+02:00",
       "url": "https://www.olbg.com/tipsters/tips/411789",
       "profile_id": "411789",
       "status": "verified",
       "count": 0,
-      "last_success_at": "2026-11-09T13:16:07+02:00",
+      "last_success_at": "2026-11-09T14:14:00+02:00",
       "all_sports_count": 13,
       "filtered_out": 13,
       "pages": 1,
@@ -9109,12 +9125,12 @@
       "transport": "HTTP"
     },
     "Geobetting": {
-      "checked_at": "2026-11-09T13:16:07+02:00",
+      "checked_at": "2026-11-09T14:14:00+02:00",
       "url": "https://www.olbg.com/tipsters/tips/420769",
       "profile_id": "420769",
       "status": "verified",
       "count": 0,
-      "last_success_at": "2026-11-09T13:16:07+02:00",
+      "last_success_at": "2026-11-09T14:14:01+02:00",
       "all_sports_count": 0,
       "filtered_out": 0,
       "pages": 1,
@@ -9122,16 +9138,16 @@
       "transport": "HTTP"
     },
     "mojojak": {
-      "checked_at": "2026-11-09T13:16:07+02:00",
+      "checked_at": "2026-11-09T14:14:01+02:00",
       "url": "https://www.olbg.com/tipsters/tips/126921",
       "profile_id": "126921",
       "status": "verified",
       "count": 0,
-      "last_success_at": "2026-11-09T13:16:08+02:00",
-      "all_sports_count": 0,
-      "filtered_out": 0,
+      "last_success_at": "2026-11-09T14:14:02+02:00",
+      "all_sports_count": 1,
+      "filtered_out": 1,
       "pages": 1,
-      "proof": "embedded hasTips=false and empty tipsByDate",
+      "proof": "embedded current-tip data",
       "transport": "HTTP"
     }
   },
