@@ -11765,9 +11765,11 @@
       "published_at": null,
       "stake_points": 25.0,
       "each_way_terms": null,
-      "alert_status": "sending",
+      "alert_status": "sent",
       "last_seen_at": "2026-11-14T21:46:56+02:00",
-      "alert_attempt_at": "2026-11-14T21:47:02+02:00"
+      "alert_attempt_at": "2026-11-14T21:47:02+02:00",
+      "alert_sent_at": "2026-11-14T21:47:04+02:00",
+      "telegram_message_id": 278
     }
   },
   "sources": {
@@ -12092,7 +12094,8 @@
     "339aa94e4247510f0ed7a693688614875b79462c4df4cb54b24c2b6c5a3a5a56",
     "f4f981a07a694415f84c2ce259531ac84f7372d786a4fe957eed5f14caf965a2",
     "0f4ba7f566a7e8fe6f6c0a3140ed480c022dbb65e83c5dbf5b157ed6d7bacf41",
-    "0657f7202ee62a0575e61f5af4ee36adb8484cafd722d64a1078d23231ebda79"
+    "0657f7202ee62a0575e61f5af4ee36adb8484cafd722d64a1078d23231ebda79",
+    "2008b63c34a877a15b13f6a17743477c9b6689293b088628b1ba2fcb977484cf"
   ],
   "schema": 2,
   "result_checks": {
