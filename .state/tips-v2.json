@@ -12802,8 +12802,9 @@
       "published_at": null,
       "stake_points": 25.0,
       "each_way_terms": null,
-      "alert_status": "pending",
-      "last_seen_at": "2026-11-16T13:51:14+02:00"
+      "alert_status": "sending",
+      "last_seen_at": "2026-11-16T13:51:14+02:00",
+      "alert_attempt_at": "2026-11-16T13:51:39+02:00"
     }
   },
   "sources": {
