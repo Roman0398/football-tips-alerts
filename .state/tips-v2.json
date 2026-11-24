@@ -19496,9 +19496,11 @@
       "handicap_olbg": "",
       "published_at": null,
       "stake_points": 50.0,
-      "alert_status": "sending",
+      "alert_status": "sent",
       "last_seen_at": "2026-11-24T21:27:50+02:00",
-      "alert_attempt_at": "2026-11-24T21:28:09+02:00"
+      "alert_attempt_at": "2026-11-24T21:28:09+02:00",
+      "alert_sent_at": "2026-11-24T21:28:10+02:00",
+      "telegram_message_id": 440
     }
   },
   "sources": {
@@ -19983,7 +19985,8 @@
     "f1790569c23ed54c2c380b61e03ba304aa9e654639f0334c7b0409b68886c3b2",
     "d7becf85c7eecd2efefeade88c954e3fa0d59298443998e824a3d8917fab272e",
     "3204aacbc40f0e95b194f788f053ce88dac8ee24dc00c9049b3eeb8d141808fc",
-    "1e3e4ea72fb552e0cae91e9bafdf8c432a53ee222224a43e598b6ca84fabc995"
+    "1e3e4ea72fb552e0cae91e9bafdf8c432a53ee222224a43e598b6ca84fabc995",
+    "0d8bec1ce355fa4949a810b07681bc3efc0c19ed2f80e0f3990db4687fc65f33"
   ],
   "schema": 2,
   "result_checks": {
