@@ -20115,11 +20115,13 @@
       "handicap_olbg": "8.50",
       "published_at": null,
       "stake_points": 50.0,
-      "alert_status": "sending",
+      "alert_status": "sent",
       "last_seen_at": "2026-11-25T22:39:52+02:00",
       "odds_olbg_latest": 1.69,
       "odds_olbg_latest_at": "2026-11-25T22:39:52+02:00",
-      "alert_attempt_at": "2026-11-25T22:40:00+02:00"
+      "alert_attempt_at": "2026-11-25T22:40:00+02:00",
+      "alert_sent_at": "2026-11-25T22:40:02+02:00",
+      "telegram_message_id": 451
     },
     "a44d62ff4fd8c74b5c34e81d381ca949f9fc63380e8a8e08005c64cc529d1ce7": {
       "id": "a44d62ff4fd8c74b5c34e81d381ca949f9fc63380e8a8e08005c64cc529d1ce7",
@@ -20640,7 +20642,8 @@
     "d75067a4cfac9d0bd95f10555f37aec32cf821c51ff36d53d950057e692a3c30",
     "3434e8a14f62162b0ee444f6b4bb916c04d614b90ae034a0fc7808c48fc8ee6c",
     "6eaafb2400686717e2d91b5708e9d87418ede819297a0de6f742f5b1d4b2a33d",
-    "2148d59c13223c2d980a13cde204185a4eb8f13c87782f8eb26ec552c1f33157"
+    "2148d59c13223c2d980a13cde204185a4eb8f13c87782f8eb26ec552c1f33157",
+    "232b89ae4eca3507b5a4c83da18800f4c3113bc0a66c44da30cd973343ffea90"
   ],
   "schema": 2,
   "result_checks": {
