@@ -20084,10 +20084,11 @@
       "handicap_olbg": "-1.50",
       "published_at": null,
       "stake_points": 50.0,
-      "alert_status": "pending",
+      "alert_status": "sending",
       "last_seen_at": "2026-11-25T22:39:52+02:00",
       "odds_olbg_latest": 1.83,
-      "odds_olbg_latest_at": "2026-11-25T22:39:52+02:00"
+      "odds_olbg_latest_at": "2026-11-25T22:39:52+02:00",
+      "alert_attempt_at": "2026-11-25T22:39:57+02:00"
     },
     "232b89ae4eca3507b5a4c83da18800f4c3113bc0a66c44da30cd973343ffea90": {
       "id": "232b89ae4eca3507b5a4c83da18800f4c3113bc0a66c44da30cd973343ffea90",
