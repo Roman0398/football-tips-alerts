@@ -20579,10 +20579,12 @@
       "stake_points": 25.0,
       "each_way_terms": null,
       "alert_status": "sent",
-      "last_seen_at": "2026-11-28T03:30:48+02:00",
+      "last_seen_at": "2026-11-28T11:23:27+02:00",
       "alert_attempt_at": "2026-11-28T03:30:50+02:00",
       "alert_sent_at": "2026-11-28T03:30:52+02:00",
-      "telegram_message_id": 459
+      "telegram_message_id": 459,
+      "odds_olbg_latest": 17.0,
+      "odds_olbg_latest_at": "2026-11-28T11:23:27+02:00"
     },
     "dd2b2ab93e05e5422d6c1979d762c7f540c641b79b679f6d65bc11ecfc0148d9": {
       "id": "dd2b2ab93e05e5422d6c1979d762c7f540c641b79b679f6d65bc11ecfc0148d9",
@@ -20609,10 +20611,12 @@
       "stake_points": 30.0,
       "each_way_terms": null,
       "alert_status": "sent",
-      "last_seen_at": "2026-11-28T03:30:48+02:00",
+      "last_seen_at": "2026-11-28T11:23:27+02:00",
       "alert_attempt_at": "2026-11-28T03:30:54+02:00",
       "alert_sent_at": "2026-11-28T03:30:55+02:00",
-      "telegram_message_id": 460
+      "telegram_message_id": 460,
+      "odds_olbg_latest": 7.0,
+      "odds_olbg_latest_at": "2026-11-28T11:23:27+02:00"
     },
     "f75c19d198991b2a3d341c1bcd78dcacd9f1a9b4a028194d586115ec474bd4fa": {
       "id": "f75c19d198991b2a3d341c1bcd78dcacd9f1a9b4a028194d586115ec474bd4fa",
@@ -20639,10 +20643,12 @@
       "stake_points": 30.0,
       "each_way_terms": null,
       "alert_status": "sent",
-      "last_seen_at": "2026-11-28T03:30:48+02:00",
+      "last_seen_at": "2026-11-28T11:23:27+02:00",
       "alert_attempt_at": "2026-11-28T03:30:57+02:00",
       "alert_sent_at": "2026-11-28T03:30:58+02:00",
-      "telegram_message_id": 461
+      "telegram_message_id": 461,
+      "odds_olbg_latest": 15.0,
+      "odds_olbg_latest_at": "2026-11-28T11:23:27+02:00"
     },
     "440e7c83b6e513402850b981dfc075019b34d040ac74d0bb35280cdf0e84a032": {
       "id": "440e7c83b6e513402850b981dfc075019b34d040ac74d0bb35280cdf0e84a032",
@@ -20705,12 +20711,12 @@
   },
   "sources": {
     "Knottlast": {
-      "checked_at": "2026-11-28T03:30:30+02:00",
+      "checked_at": "2026-11-28T11:23:06+02:00",
       "url": "https://www.olbg.com/tipsters/tips/666034",
       "profile_id": "666034",
       "status": "verified",
       "count": 3,
-      "last_success_at": "2026-11-28T03:30:32+02:00",
+      "last_success_at": "2026-11-28T11:23:07+02:00",
       "all_sports_count": 3,
       "filtered_out": 0,
       "pages": 1,
@@ -20718,12 +20724,12 @@
       "transport": "HTTP"
     },
     "Niffler": {
-      "checked_at": "2026-11-28T03:30:32+02:00",
+      "checked_at": "2026-11-28T11:23:07+02:00",
       "url": "https://www.olbg.com/tipsters/tips/638883",
       "profile_id": "638883",
       "status": "verified",
       "count": 0,
-      "last_success_at": "2026-11-28T03:30:33+02:00",
+      "last_success_at": "2026-11-28T11:23:08+02:00",
       "all_sports_count": 3,
       "filtered_out": 3,
       "pages": 1,
@@ -20731,7 +20737,7 @@
       "transport": "HTTP"
     },
     "dacris69": {
-      "checked_at": "2026-11-28T03:30:33+02:00",
+      "checked_at": "2026-11-28T11:23:08+02:00",
       "url": "https://www.olbg.com/tipsters/tips/480440",
       "profile_id": "480440",
       "status": "unverified",
@@ -20741,25 +20747,22 @@
       "last_verified_count": 0
     },
     "risto123": {
-      "checked_at": "2026-11-28T03:30:44+02:00",
+      "checked_at": "2026-11-28T11:23:17+02:00",
       "url": "https://www.olbg.com/tipsters/tips/411789",
       "profile_id": "411789",
-      "status": "verified",
-      "count": 2,
+      "status": "unverified",
+      "count": null,
+      "details": "Unverified: Empty page contradicts pagination",
       "last_success_at": "2026-11-28T03:30:46+02:00",
-      "all_sports_count": 17,
-      "filtered_out": 15,
-      "pages": 1,
-      "proof": "embedded current-tip data",
-      "transport": "HTTP"
+      "last_verified_count": 2
     },
     "Geobetting": {
-      "checked_at": "2026-11-28T03:30:46+02:00",
+      "checked_at": "2026-11-28T11:23:26+02:00",
       "url": "https://www.olbg.com/tipsters/tips/420769",
       "profile_id": "420769",
       "status": "verified",
       "count": 0,
-      "last_success_at": "2026-11-28T03:30:47+02:00",
+      "last_success_at": "2026-11-28T11:23:27+02:00",
       "all_sports_count": 0,
       "filtered_out": 0,
       "pages": 1,
@@ -20767,16 +20770,16 @@
       "transport": "HTTP"
     },
     "mojojak": {
-      "checked_at": "2026-11-28T03:30:47+02:00",
+      "checked_at": "2026-11-28T11:23:27+02:00",
       "url": "https://www.olbg.com/tipsters/tips/126921",
       "profile_id": "126921",
       "status": "verified",
       "count": 0,
-      "last_success_at": "2026-11-28T03:30:48+02:00",
-      "all_sports_count": 2,
-      "filtered_out": 2,
+      "last_success_at": "2026-11-28T11:23:27+02:00",
+      "all_sports_count": 0,
+      "filtered_out": 0,
       "pages": 1,
-      "proof": "embedded current-tip data",
+      "proof": "embedded hasTips=false and empty tipsByDate",
       "transport": "HTTP"
     }
   },
